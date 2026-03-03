@@ -144,14 +144,17 @@ export const storage = {
 
     if (countError) throw countError;
 
-    // For total kilos, we need to sum. Supabase doesn't have a direct sum API without RPC.
-    // We'll fetch all orders (might be heavy if many orders, but okay for now) or use a limit.
-    // Better: Create a SQL function in Supabase, but for now let's fetch 'total_kilos' column.
     const { data: orders, error: kilosError } = await supabase
       .from('orders')
-      .select('total_kilos, created_at');
+      .select('total_kilos, created_at, customer_name');
 
     if (kilosError) throw kilosError;
+
+    const { data: items, error: itemsError } = await supabase
+      .from('order_items')
+      .select('product_name, total_item_kilos');
+
+    if (itemsError) throw itemsError;
 
     const totalKilos = orders.reduce((acc, o) => acc + (o.total_kilos || 0), 0);
 
@@ -171,7 +174,33 @@ export const storage = {
       });
     }
 
-    return { totalOrders: totalOrders || 0, totalKilos, dailyStats };
+    // Top Customers
+    const customerMap: Record<string, number> = {};
+    orders.forEach(o => {
+      customerMap[o.customer_name] = (customerMap[o.customer_name] || 0) + (o.total_kilos || 0);
+    });
+    const topCustomers = Object.entries(customerMap)
+      .map(([name, kilos]) => ({ name, kilos }))
+      .sort((a, b) => b.kilos - a.kilos)
+      .slice(0, 5);
+
+    // Top Products
+    const productMap: Record<string, number> = {};
+    items.forEach(i => {
+      productMap[i.product_name] = (productMap[i.product_name] || 0) + (i.total_item_kilos || 0);
+    });
+    const topProducts = Object.entries(productMap)
+      .map(([name, kilos]) => ({ name, kilos }))
+      .sort((a, b) => b.kilos - a.kilos)
+      .slice(0, 5);
+
+    return { 
+      totalOrders: totalOrders || 0, 
+      totalKilos, 
+      dailyStats,
+      topCustomers,
+      topProducts
+    };
   },
 
   getCustomers: async () => {

@@ -104,6 +104,65 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Top Lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h3 className="text-lg font-semibold mb-4">Top 5 Clientes (Volumen)</h3>
+          <div className="space-y-4">
+            {stats.topCustomers.map((customer, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center font-bold">
+                    {index + 1}
+                  </span>
+                  <span className="text-slate-700 font-medium">{customer.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden hidden md:block">
+                    <div 
+                      className="h-full bg-emerald-500" 
+                      style={{ width: `${(customer.kilos / stats.topCustomers[0].kilos) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-mono font-bold text-slate-900">{customer.kilos.toFixed(1)} kg</span>
+                </div>
+              </div>
+            ))}
+            {stats.topCustomers.length === 0 && (
+              <p className="text-center text-slate-400 py-4">Sin datos suficientes</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h3 className="text-lg font-semibold mb-4">Top 5 Productos (Kilos)</h3>
+          <div className="space-y-4">
+            {stats.topProducts.map((product, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs flex items-center justify-center font-bold">
+                    {index + 1}
+                  </span>
+                  <span className="text-slate-700 font-medium">{product.name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden hidden md:block">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${(product.kilos / stats.topProducts[0].kilos) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-mono font-bold text-slate-900">{product.kilos.toFixed(1)} kg</span>
+                </div>
+              </div>
+            ))}
+            {stats.topProducts.length === 0 && (
+              <p className="text-center text-slate-400 py-4">Sin datos suficientes</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

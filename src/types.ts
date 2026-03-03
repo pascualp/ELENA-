@@ -26,4 +26,12 @@ export interface Stats {
     kilos: number;
     count: number;
   }[];
+  topCustomers: {
+    name: string;
+    kilos: number;
+  }[];
+  topProducts: {
+    name: string;
+    kilos: number;
+  }[];
 }
