@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Stats } from '../types';
-import { TrendingUp, Package, Scale, Calendar } from 'lucide-react';
+import { TrendingUp, Package, Scale, Calendar, PlusCircle, List } from 'lucide-react';
 import { storage } from '../lib/storage';
 
-export function Dashboard() {
+interface DashboardProps {
+  onAction: (tab: string) => void;
+}
+
+export function Dashboard({ onAction }: DashboardProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +31,25 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <h2 className="text-3xl font-bold text-slate-800">Panel de Control</h2>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h2 className="text-3xl font-bold text-slate-800">Panel de Control</h2>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => onAction('new-order')}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-sm"
+          >
+            <PlusCircle size={18} />
+            Nuevo Pedido
+          </button>
+          <button 
+            onClick={() => onAction('orders')}
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl font-medium transition-colors shadow-sm"
+          >
+            <List size={18} />
+            Ver Pedidos
+          </button>
+        </div>
+      </div>
       
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

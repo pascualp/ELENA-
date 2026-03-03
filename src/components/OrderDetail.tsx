@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, ArrowLeft, Edit, Download } from 'lucide-react';
+import { Printer, ArrowLeft, Edit, Download, LayoutDashboard } from 'lucide-react';
 import { Order, OrderItem } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -9,9 +9,10 @@ interface OrderDetailProps {
   orderId: number;
   onBack: () => void;
   onEdit: (order: Order) => void;
+  onViewDashboard: () => void;
 }
 
-export function OrderDetail({ orderId, onBack, onEdit }: OrderDetailProps) {
+export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderDetailProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -88,13 +89,22 @@ export function OrderDetail({ orderId, onBack, onEdit }: OrderDetailProps) {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Action Bar - Hidden when printing */}
       <div className="flex justify-between items-center print:hidden">
-        <button 
-          onClick={onBack}
-          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors"
-        >
-          <ArrowLeft size={20} />
-          Volver a la lista
-        </button>
+        <div className="flex gap-4">
+          <button 
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            Volver
+          </button>
+          <button 
+            onClick={onViewDashboard}
+            className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            <LayoutDashboard size={18} />
+            Panel
+          </button>
+        </div>
         
         <div className="flex gap-3">
           <button

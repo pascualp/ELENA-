@@ -20,9 +20,9 @@ interface SidebarProps {
 
 export function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: SidebarProps) {
   const menuItems = [
+    { id: 'dashboard', label: 'Panel de Control', icon: LayoutDashboard },
     { id: 'new-order', label: 'Nuevo Pedido', icon: PlusCircle },
     { id: 'orders', label: 'Lista de Pedidos', icon: List },
-    { id: 'dashboard', label: 'Panel Principal', icon: LayoutDashboard },
   ];
 
   return (

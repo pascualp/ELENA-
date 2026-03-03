@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus } from 'lucide-react';
+import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard } from 'lucide-react';
 import { Order } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -9,9 +9,10 @@ interface OrderListProps {
   onSelectOrder: (order: Order) => void;
   onEditOrder: (order: Order) => void;
   onNewOrder: () => void;
+  onViewDashboard: () => void;
 }
 
-export function OrderList({ onSelectOrder, onEditOrder, onNewOrder }: OrderListProps) {
+export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashboard }: OrderListProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +97,13 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder }: OrderListP
         <h2 className="text-2xl font-bold text-slate-800">Historial de Pedidos</h2>
         
         <div className="flex gap-2 w-full md:w-auto">
+          <button
+            onClick={onViewDashboard}
+            className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <LayoutDashboard size={18} />
+            <span className="hidden md:inline">Panel de Control</span>
+          </button>
           <button
             onClick={onNewOrder}
             className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"

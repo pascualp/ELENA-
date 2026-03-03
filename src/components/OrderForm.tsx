@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Calculator, X, List } from 'lucide-react';
+import { Plus, Trash2, Save, Calculator, X, List, LayoutDashboard } from 'lucide-react';
 import { OrderItem, Order } from '../types';
 import { storage } from '../lib/storage';
 
@@ -8,9 +8,10 @@ interface OrderFormProps {
   initialOrder?: Order | null;
   onCancel?: () => void;
   onViewHistory?: () => void;
+  onViewDashboard?: () => void;
 }
 
-export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistory }: OrderFormProps) {
+export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistory, onViewDashboard }: OrderFormProps) {
   const [customerName, setCustomerName] = useState('');
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<OrderItem[]>([
@@ -104,6 +105,15 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
           </p>
         </div>
         <div className="flex gap-2">
+          {onViewDashboard && (
+            <button
+              onClick={onViewDashboard}
+              className="flex items-center gap-2 text-slate-600 hover:text-blue-600 hover:bg-slate-50 px-4 py-2 rounded-lg transition-colors border border-slate-200"
+            >
+              <LayoutDashboard size={20} />
+              <span className="hidden sm:inline">Panel</span>
+            </button>
+          )}
           {!initialOrder && onViewHistory && (
             <button
               onClick={onViewHistory}

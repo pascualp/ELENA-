@@ -10,7 +10,7 @@ import { Order } from './types';
 import { storage } from './lib/storage';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('new-order');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -45,7 +45,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onAction={setActiveTab} />;
       case 'new-order':
         return (
           <OrderForm 
@@ -53,6 +53,7 @@ export default function App() {
             initialOrder={editingOrder}
             onCancel={editingOrder ? handleCancelEdit : undefined}
             onViewHistory={() => setActiveTab('orders')}
+            onViewDashboard={() => setActiveTab('dashboard')}
           />
         );
       case 'orders':
@@ -60,6 +61,7 @@ export default function App() {
           <OrderList 
             onSelectOrder={handleSelectOrder} 
             onEditOrder={handleEditOrder} 
+            onViewDashboard={() => setActiveTab('dashboard')}
             onNewOrder={() => {
               setEditingOrder(null);
               setActiveTab('new-order');
@@ -72,11 +74,13 @@ export default function App() {
             orderId={selectedOrder.id} 
             onBack={() => setActiveTab('orders')} 
             onEdit={handleEditOrder}
+            onViewDashboard={() => setActiveTab('dashboard')}
           />
         ) : (
           <OrderList 
             onSelectOrder={handleSelectOrder} 
             onEditOrder={handleEditOrder}
+            onViewDashboard={() => setActiveTab('dashboard')}
             onNewOrder={() => {
               setEditingOrder(null);
               setActiveTab('new-order');
@@ -84,7 +88,7 @@ export default function App() {
           />
         );
       default:
-        return <Dashboard />;
+        return <Dashboard onAction={setActiveTab} />;
     }
   };
 
