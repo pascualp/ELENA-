@@ -2,22 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Stats } from '../types';
 import { TrendingUp, Package, Scale, Calendar } from 'lucide-react';
+import { storage } from '../lib/storage';
 
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/stats')
-      .then(res => res.json())
-      .then(data => {
+    const fetchData = async () => {
+      try {
+        const data = await storage.getStats();
         setStats(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
         setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+      }
+    };
+    fetchData();
   }, []);
 
   if (loading) return <div className="p-8 text-center">Cargando estadísticas...</div>;

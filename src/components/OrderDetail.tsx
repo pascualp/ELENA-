@@ -3,6 +3,7 @@ import { Printer, ArrowLeft, Edit, Download } from 'lucide-react';
 import { Order, OrderItem } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
+import { storage } from '../lib/storage';
 
 interface OrderDetailProps {
   orderId: number;
@@ -14,18 +15,16 @@ export function OrderDetail({ orderId, onBack, onEdit }: OrderDetailProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchOrder = () => {
+  const fetchOrder = async () => {
     setLoading(true);
-    fetch(`/api/orders/${orderId}`)
-      .then(res => res.json())
-      .then(data => {
-        setOrder(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    try {
+      const data = await storage.getOrder(orderId);
+      setOrder(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -34,11 +33,7 @@ export function OrderDetail({ orderId, onBack, onEdit }: OrderDetailProps) {
 
   const updateStatus = async (status: string) => {
     try {
-      await fetch(`/api/orders/${orderId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
+      await storage.updateStatus(orderId, status);
       fetchOrder();
     } catch (error) {
       console.error(error);

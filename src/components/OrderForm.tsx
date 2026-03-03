@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Calculator, X, List } from 'lucide-react';
 import { OrderItem, Order } from '../types';
+import { storage } from '../lib/storage';
 
 interface OrderFormProps {
   onOrderCreated: () => void;
@@ -20,10 +21,11 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
 
   useEffect(() => {
     // Fetch recent customers for autocomplete
-    fetch('/api/customers')
-      .then(res => res.json())
-      .then(data => setRecentCustomers(data))
-      .catch(err => console.error('Error fetching customers:', err));
+    const fetchCustomers = async () => {
+      const customers = await storage.getCustomers();
+      setRecentCustomers(customers);
+    };
+    fetchCustomers();
   }, []);
 
   useEffect(() => {
@@ -71,33 +73,20 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     setIsSubmitting(true);
 
     try {
-      const url = initialOrder ? `/api/orders/${initialOrder.id}` : '/api/orders';
-      const method = initialOrder ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_name: customerName,
-          notes,
-          items
-        }),
-      });
-
-      if (response.ok) {
-        alert(initialOrder ? 'Pedido actualizado correctamente' : 'Pedido guardado correctamente');
-        if (!initialOrder) {
-          setCustomerName('');
-          setNotes('');
-          setItems([{ product_name: '', quantity: 1, kilos_per_unit: 0, lot_number: '', is_box: false }]);
-        }
-        onOrderCreated();
+      if (initialOrder) {
+        await storage.updateOrder(initialOrder.id, { customer_name: customerName, notes }, items);
+        alert('Pedido actualizado correctamente');
       } else {
-        alert('Error al guardar el pedido');
+        await storage.createOrder({ customer_name: customerName, notes }, items);
+        alert('Pedido guardado correctamente');
+        setCustomerName('');
+        setNotes('');
+        setItems([{ product_name: '', quantity: 1, kilos_per_unit: 0, lot_number: '', is_box: false }]);
       }
+      onOrderCreated();
     } catch (error) {
       console.error(error);
-      alert('Error de conexión');
+      alert('Error al guardar el pedido');
     } finally {
       setIsSubmitting(false);
     }

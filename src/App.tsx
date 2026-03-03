@@ -7,6 +7,8 @@ import { OrderDetail } from './components/OrderDetail';
 import { Menu } from 'lucide-react';
 import { Order } from './types';
 
+import { storage } from './lib/storage';
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('new-order');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -23,19 +25,12 @@ export default function App() {
     setActiveTab('order-detail');
   };
 
-  const handleEditOrder = (order: Order) => {
-    // We need to fetch the full order with items if we only have the summary from the list
-    // But OrderList fetches everything? No, let's check.
-    // OrderList fetches /api/orders which returns all columns from 'orders' table.
-    // It does NOT return items.
-    // So we need to fetch the full order details before editing.
-    fetch(`/api/orders/${order.id}`)
-      .then(res => res.json())
-      .then(fullOrder => {
-        setEditingOrder(fullOrder);
-        setActiveTab('new-order');
-      })
-      .catch(err => console.error(err));
+  const handleEditOrder = async (order: Order) => {
+    const fullOrder = await storage.getOrder(order.id);
+    if (fullOrder) {
+      setEditingOrder(fullOrder);
+      setActiveTab('new-order');
+    }
   };
 
   const handleCancelEdit = () => {

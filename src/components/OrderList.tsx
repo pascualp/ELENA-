@@ -3,6 +3,7 @@ import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Load
 import { Order } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
+import { storage } from '../lib/storage';
 
 interface OrderListProps {
   onSelectOrder: (order: Order) => void;
@@ -17,18 +18,16 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder }: OrderListP
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
 
-  const fetchOrders = () => {
+  const fetchOrders = async () => {
     setLoading(true);
-    fetch('/api/orders')
-      .then(res => res.json())
-      .then(data => {
-        setOrders(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
+    try {
+      const data = await storage.getOrders();
+      setOrders(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -38,8 +37,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder }: OrderListP
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const response = await fetch('/api/export-data');
-      const data = await response.json();
+      const data = await storage.getAllDataForExport();
 
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -59,15 +57,11 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder }: OrderListP
     if (!confirm('¿Está seguro de eliminar este pedido?')) return;
 
     try {
-      const response = await fetch(`/api/orders/${id}`, { method: 'DELETE' });
-      if (response.ok) {
-        fetchOrders();
-      } else {
-        alert('Error al eliminar el pedido');
-      }
+      await storage.deleteOrder(id);
+      fetchOrders();
     } catch (error) {
       console.error(error);
-      alert('Error de conexión');
+      alert('Error al eliminar el pedido');
     }
   };
 
