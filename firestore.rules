@@ -7,10 +7,10 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read, write: if isAuthenticated();
-    }
-
-    match /order_items/{itemId} {
-      allow read, write: if isAuthenticated();
+      
+      match /items/{itemId} {
+        allow read, write: if isAuthenticated();
+      }
     }
   }
 }

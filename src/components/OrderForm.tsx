@@ -85,9 +85,9 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
         setItems([{ product_name: '', quantity: 1, kilos_per_unit: 0, lot_number: '', is_box: false }]);
       }
       onOrderCreated();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Error al guardar el pedido');
+      alert(`Error al guardar el pedido: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsSubmitting(false);
     }

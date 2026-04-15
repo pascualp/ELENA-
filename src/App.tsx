@@ -31,9 +31,9 @@ export default function App() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in:', error);
-      alert('Error al iniciar sesión');
+      alert(`Error al iniciar sesión: ${error.message || 'Error desconocido'}\n\nSi el error es "auth/unauthorized-domain", necesitas añadir tu dominio de Vercel en la consola de Firebase.`);
     }
   };
 
