@@ -1,19 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { OrderForm } from './components/OrderForm';
 import { OrderList } from './components/OrderList';
 import { OrderDetail } from './components/OrderDetail';
-import { Menu } from 'lucide-react';
+import { Menu, LogIn, Loader2 } from 'lucide-react';
 import { Order } from './types';
 
 import { storage } from './lib/storage';
+import { auth } from './lib/firebase';
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error('Error signing in:', error);
+      alert('Error al iniciar sesión');
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-emerald-600" size={48} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 text-center max-w-md w-full mx-4">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">GestorPro</h1>
+          <p className="text-slate-500 mb-8">Inicia sesión para acceder a tu panel de control y gestionar pedidos.</p>
+          <button 
+            onClick={handleLogin}
+            className="w-full flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-colors shadow-sm"
+          >
+            <LogIn size={20} />
+            Iniciar sesión con Google
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleOrderCreated = () => {
     setEditingOrder(null);

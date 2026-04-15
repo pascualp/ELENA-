@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import { storage } from '../lib/storage';
 
 interface OrderDetailProps {
-  orderId: number;
+  orderId: string;
   onBack: () => void;
   onEdit: (order: Order) => void;
   onViewDashboard: () => void;
@@ -141,7 +141,7 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
         <div className="flex justify-between items-start border-b border-slate-100 pb-8 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">Orden de Pedido</h1>
-            <p className="text-slate-500">#{order.id.toString().padStart(6, '0')}</p>
+            <p className="text-slate-500">#{order.id.slice(0, 6)}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-slate-500">

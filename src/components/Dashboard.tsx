@@ -11,14 +11,16 @@ interface DashboardProps {
 export function Dashboard({ onAction }: DashboardProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const data = await storage.getStats();
         setStats(data);
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
+        setErrorMsg(error.message || 'No se pudo conectar a la base de datos');
       } finally {
         setLoading(false);
       }
@@ -27,6 +29,16 @@ export function Dashboard({ onAction }: DashboardProps) {
   }, []);
 
   if (loading) return <div className="p-8 text-center">Cargando estadísticas...</div>;
+  if (errorMsg) return (
+    <div className="p-8 text-center">
+      <div className="text-red-500 font-bold mb-2">Error al cargar datos</div>
+      <div className="text-slate-600 text-sm max-w-md mx-auto bg-red-50 p-4 rounded-lg border border-red-100">
+        {errorMsg}
+        <br/><br/>
+        <strong>Nota:</strong> Si estás usando la versión gratuita de Supabase, es posible que tu proyecto se haya pausado por inactividad. Ve a <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 underline">supabase.com</a> para reactivarlo.
+      </div>
+    </div>
+  );
   if (!stats) return <div className="p-8 text-center text-red-500">Error al cargar datos</div>;
 
   return (

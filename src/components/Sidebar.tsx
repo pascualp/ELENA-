@@ -7,9 +7,12 @@ import {
   Package, 
   TrendingUp,
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 
 interface SidebarProps {
   activeTab: string;
@@ -24,6 +27,14 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: SidebarP
     { id: 'new-order', label: 'Nuevo Pedido', icon: PlusCircle },
     { id: 'orders', label: 'Lista de Pedidos', icon: List },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
     <>
@@ -72,8 +83,17 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }: SidebarP
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-          v1.0.0 - Sistema de Trazabilidad
+        <div className="p-4 border-t border-slate-800">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <LogOut size={20} />
+            <span>Cerrar Sesión</span>
+          </button>
+          <div className="mt-4 text-xs text-slate-500 text-center">
+            v1.0.0 - Sistema de Trazabilidad
+          </div>
         </div>
       </div>
     </>

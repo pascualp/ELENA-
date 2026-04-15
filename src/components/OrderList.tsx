@@ -15,17 +15,20 @@ interface OrderListProps {
 export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashboard }: OrderListProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const data = await storage.getOrders();
       setOrders(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setErrorMsg(error.message || 'Error al conectar con la base de datos');
     } finally {
       setLoading(false);
     }
@@ -53,7 +56,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: number) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!confirm('¿Está seguro de eliminar este pedido?')) return;
 
@@ -149,6 +152,17 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">Cargando pedidos...</td>
                 </tr>
+              ) : errorMsg ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-red-500">
+                    <div className="font-bold mb-2">Error al cargar pedidos</div>
+                    <div className="text-sm max-w-md mx-auto bg-red-50 p-4 rounded-lg border border-red-100 text-slate-600">
+                      {errorMsg}
+                      <br/><br/>
+                      <strong>Nota:</strong> Si usas Supabase gratuito, tu proyecto puede estar pausado por inactividad.
+                    </div>
+                  </td>
+                </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No se encontraron pedidos</td>
@@ -160,7 +174,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                     onClick={() => onSelectOrder(order)}
                     className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
                   >
-                    <td className="px-6 py-4 font-mono text-sm text-slate-500">#{order.id.toString().padStart(4, '0')}</td>
+                    <td className="px-6 py-4 font-mono text-sm text-slate-500">#{order.id.slice(0, 6)}</td>
                     <td className="px-6 py-4 font-medium text-slate-900">{order.customer_name}</td>
                     <td className="px-6 py-4 text-sm text-slate-500">
                       {new Date(order.created_at).toLocaleDateString('es-ES')}

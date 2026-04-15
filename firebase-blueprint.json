@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Order": {
+      "title": "Order",
+      "description": "A customer order",
+      "type": "object",
+      "properties": {
+        "customer_name": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "cancelled"] },
+        "total_kilos": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customer_name", "status", "total_kilos", "created_at"]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "An item in an order",
+      "type": "object",
+      "properties": {
+        "order_id": { "type": "string" },
+        "product_name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "kilos_per_unit": { "type": "number" },
+        "total_item_kilos": { "type": "number" },
+        "lot_number": { "type": "string" },
+        "is_box": { "type": "boolean" }
+      },
+      "required": ["order_id", "product_name", "quantity", "kilos_per_unit", "total_item_kilos"]
+    }
+  },
+  "firestore": {
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders"
+    },
+    "/order_items/{itemId}": {
+      "schema": { "$ref": "#/entities/OrderItem" },
+      "description": "Items belonging to orders"
+    }
+  }
+}

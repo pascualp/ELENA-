@@ -1,5 +1,6 @@
 export interface OrderItem {
-  id?: number;
+  id?: string;
+  order_id?: string;
   product_name: string;
   quantity: number;
   kilos_per_unit: number;
@@ -9,7 +10,7 @@ export interface OrderItem {
 }
 
 export interface Order {
-  id: number;
+  id: string;
   customer_name: string;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
   created_at: string;

@@ -1,161 +1,125 @@
-import { supabase } from './supabase';
+import { db } from './firebase';
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { Order, OrderItem } from '../types';
 
 export const storage = {
   getOrders: async (): Promise<Order[]> => {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+    const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
   },
 
-  getOrder: async (id: number): Promise<Order | null> => {
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', id)
-      .single();
+  getOrder: async (id: string): Promise<Order | null> => {
+    const docRef = doc(db, 'orders', id);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
 
-    if (orderError) return null;
+    const order = { id: docSnap.id, ...docSnap.data() } as Order;
 
-    const { data: items, error: itemsError } = await supabase
-      .from('order_items')
-      .select('*')
-      .eq('order_id', id);
+    const itemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
+    order.items = itemsSnap.docs.map(itemDoc => ({ id: itemDoc.id, ...itemDoc.data() } as OrderItem));
 
-    if (itemsError) throw itemsError;
-
-    return { ...order, items: items || [] };
+    return order;
   },
 
   createOrder: async (orderData: Omit<Order, 'id' | 'created_at' | 'status' | 'total_kilos'>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos'>[]): Promise<Order> => {
-    // Calculate total kilos
     let totalKilos = 0;
     items.forEach(item => {
       totalKilos += (item.quantity * item.kilos_per_unit);
     });
 
-    // Insert Order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert([{
-        customer_name: orderData.customer_name,
-        notes: orderData.notes,
-        status: 'pending',
-        total_kilos: totalKilos
-      }])
-      .select()
-      .single();
+    const orderRef = doc(collection(db, 'orders'));
+    const newOrder: any = {
+      customer_name: orderData.customer_name,
+      notes: orderData.notes,
+      status: 'pending',
+      total_kilos: totalKilos,
+      created_at: new Date().toISOString()
+    };
 
-    if (orderError) throw orderError;
+    const batch = writeBatch(db);
+    batch.set(orderRef, newOrder);
 
-    // Prepare Items
-    const itemsToInsert = items.map(item => ({
-      order_id: order.id,
-      product_name: item.product_name,
-      quantity: item.quantity,
-      kilos_per_unit: item.kilos_per_unit,
-      total_item_kilos: item.quantity * item.kilos_per_unit,
-      lot_number: item.lot_number,
-      is_box: item.is_box
-    }));
+    const insertedItems: OrderItem[] = [];
+    items.forEach(item => {
+      const itemRef = doc(collection(db, 'orders', orderRef.id, 'items'));
+      const newItem = {
+        product_name: item.product_name,
+        quantity: item.quantity,
+        kilos_per_unit: item.kilos_per_unit,
+        total_item_kilos: item.quantity * item.kilos_per_unit,
+        lot_number: item.lot_number,
+        is_box: item.is_box
+      };
+      batch.set(itemRef, newItem);
+      insertedItems.push({ id: itemRef.id, order_id: orderRef.id, ...newItem });
+    });
 
-    // Insert Items
-    const { data: insertedItems, error: itemsError } = await supabase
-      .from('order_items')
-      .insert(itemsToInsert)
-      .select();
+    await batch.commit();
 
-    if (itemsError) throw itemsError;
-
-    return { ...order, items: insertedItems };
+    return { id: orderRef.id, ...newOrder, items: insertedItems };
   },
 
-  updateOrder: async (id: number, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos'>[]) => {
-    // Calculate new total
+  updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos'>[]) => {
     let totalKilos = 0;
     items.forEach(item => {
       totalKilos += (item.quantity * item.kilos_per_unit);
     });
 
-    // Update Order
-    const { error: orderError } = await supabase
-      .from('orders')
-      .update({
-        customer_name: orderData.customer_name,
-        notes: orderData.notes,
-        total_kilos: totalKilos
-      })
-      .eq('id', id);
+    const orderRef = doc(db, 'orders', id);
+    const batch = writeBatch(db);
 
-    if (orderError) throw orderError;
+    batch.update(orderRef, {
+      customer_name: orderData.customer_name,
+      notes: orderData.notes,
+      total_kilos: totalKilos
+    });
 
     // Delete old items
-    const { error: deleteError } = await supabase
-      .from('order_items')
-      .delete()
-      .eq('order_id', id);
-
-    if (deleteError) throw deleteError;
+    const oldItemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
+    oldItemsSnap.docs.forEach(itemDoc => {
+      batch.delete(itemDoc.ref);
+    });
 
     // Insert new items
-    const itemsToInsert = items.map(item => ({
-      order_id: id,
-      product_name: item.product_name,
-      quantity: item.quantity,
-      kilos_per_unit: item.kilos_per_unit,
-      total_item_kilos: item.quantity * item.kilos_per_unit,
-      lot_number: item.lot_number,
-      is_box: item.is_box
-    }));
+    items.forEach(item => {
+      const itemRef = doc(collection(db, 'orders', id, 'items'));
+      batch.set(itemRef, {
+        product_name: item.product_name,
+        quantity: item.quantity,
+        kilos_per_unit: item.kilos_per_unit,
+        total_item_kilos: item.quantity * item.kilos_per_unit,
+        lot_number: item.lot_number,
+        is_box: item.is_box
+      });
+    });
 
-    const { error: insertError } = await supabase
-      .from('order_items')
-      .insert(itemsToInsert);
-
-    if (insertError) throw insertError;
+    await batch.commit();
   },
 
-  updateStatus: async (id: number, status: string) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ status })
-      .eq('id', id);
+  updateStatus: async (id: string, status: string) => {
+    const orderRef = doc(db, 'orders', id);
+    await updateDoc(orderRef, { status });
+  },
+
+  deleteOrder: async (id: string) => {
+    const orderRef = doc(db, 'orders', id);
+    const batch = writeBatch(db);
     
-    if (error) throw error;
-  },
-
-  deleteOrder: async (id: number) => {
-    const { error } = await supabase
-      .from('orders')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    const itemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
+    itemsSnap.docs.forEach(itemDoc => {
+      batch.delete(itemDoc.ref);
+    });
+    
+    batch.delete(orderRef);
+    await batch.commit();
   },
 
   getStats: async () => {
-    const { count: totalOrders, error: countError } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true });
-
-    if (countError) throw countError;
-
-    const { data: orders, error: kilosError } = await supabase
-      .from('orders')
-      .select('total_kilos, created_at, customer_name');
-
-    if (kilosError) throw kilosError;
-
-    const { data: items, error: itemsError } = await supabase
-      .from('order_items')
-      .select('product_name, total_item_kilos');
-
-    if (itemsError) throw itemsError;
-
+    const ordersSnap = await getDocs(collection(db, 'orders'));
+    const orders = ordersSnap.docs.map(doc => doc.data() as Order);
+    
+    const totalOrders = orders.length;
     const totalKilos = orders.reduce((acc, o) => acc + (o.total_kilos || 0), 0);
 
     // Daily stats (last 7 days)
@@ -165,7 +129,7 @@ export const storage = {
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       
-      const ordersThatDay = orders.filter(o => o.created_at.startsWith(dateStr));
+      const ordersThatDay = orders.filter(o => o.created_at && o.created_at.startsWith(dateStr));
       
       dailyStats.push({
         date: dateStr,
@@ -177,7 +141,9 @@ export const storage = {
     // Top Customers
     const customerMap: Record<string, number> = {};
     orders.forEach(o => {
-      customerMap[o.customer_name] = (customerMap[o.customer_name] || 0) + (o.total_kilos || 0);
+      if (o.customer_name) {
+        customerMap[o.customer_name] = (customerMap[o.customer_name] || 0) + (o.total_kilos || 0);
+      }
     });
     const topCustomers = Object.entries(customerMap)
       .map(([name, kilos]) => ({ name, kilos }))
@@ -186,16 +152,22 @@ export const storage = {
 
     // Top Products
     const productMap: Record<string, number> = {};
-    items.forEach(i => {
-      productMap[i.product_name] = (productMap[i.product_name] || 0) + (i.total_item_kilos || 0);
-    });
+    for (const orderDoc of ordersSnap.docs) {
+      const itemsSnap = await getDocs(collection(db, 'orders', orderDoc.id, 'items'));
+      itemsSnap.docs.forEach(itemDoc => {
+        const item = itemDoc.data() as OrderItem;
+        if (item.product_name) {
+          productMap[item.product_name] = (productMap[item.product_name] || 0) + (item.total_item_kilos || 0);
+        }
+      });
+    }
     const topProducts = Object.entries(productMap)
       .map(([name, kilos]) => ({ name, kilos }))
       .sort((a, b) => b.kilos - a.kilos)
       .slice(0, 5);
 
     return { 
-      totalOrders: totalOrders || 0, 
+      totalOrders, 
       totalKilos, 
       dailyStats,
       topCustomers,
@@ -204,31 +176,24 @@ export const storage = {
   },
 
   getCustomers: async () => {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('customer_name')
-      .order('customer_name');
-
-    if (error) throw error;
-
-    const customers = new Set(data.map(o => o.customer_name));
+    const ordersSnap = await getDocs(collection(db, 'orders'));
+    const customers = new Set(ordersSnap.docs.map(doc => doc.data().customer_name).filter(Boolean));
     return Array.from(customers);
   },
 
   getAllDataForExport: async () => {
-    const { data: orders, error: ordersError } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (*)
-      `)
-      .order('created_at', { ascending: false });
-
-    if (ordersError) throw ordersError;
-
-    return orders.map(order => {
-      if (!order.order_items || order.order_items.length === 0) {
-        return [{
+    const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+    const ordersSnap = await getDocs(q);
+    
+    const exportData: any[] = [];
+    
+    for (const orderDoc of ordersSnap.docs) {
+      const order = { id: orderDoc.id, ...orderDoc.data() } as Order;
+      const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
+      const items = itemsSnap.docs.map(doc => doc.data() as OrderItem);
+      
+      if (items.length === 0) {
+        exportData.push({
           "ID Pedido": order.id,
           "Cliente": order.customer_name,
           "Fecha Creación": new Date(order.created_at).toLocaleString('es-ES'),
@@ -241,23 +206,27 @@ export const storage = {
           "Cantidad": "",
           "Kg por Unidad": "",
           "Total Kilos Item": ""
-        }];
+        });
+      } else {
+        items.forEach(item => {
+          exportData.push({
+            "ID Pedido": order.id,
+            "Cliente": order.customer_name,
+            "Fecha Creación": new Date(order.created_at).toLocaleString('es-ES'),
+            "Estado": order.status,
+            "Notas": order.notes,
+            "Total Kilos Pedido": order.total_kilos,
+            "Producto": item.product_name,
+            "Lote": item.lot_number,
+            "Es Caja": item.is_box ? "Sí" : "No",
+            "Cantidad": item.quantity,
+            "Kg por Unidad": item.kilos_per_unit,
+            "Total Kilos Item": item.total_item_kilos
+          });
+        });
       }
-      return order.order_items.map((item: any) => ({
-        "ID Pedido": order.id,
-        "Cliente": order.customer_name,
-        "Fecha Creación": new Date(order.created_at).toLocaleString('es-ES'),
-        "Estado": order.status,
-        "Notas": order.notes,
-        "Total Kilos Pedido": order.total_kilos,
-        "Producto": item.product_name,
-        "Lote": item.lot_number,
-        "Es Caja": item.is_box ? "Sí" : "No",
-        "Cantidad": item.quantity,
-        "Kg por Unidad": item.kilos_per_unit,
-        "Total Kilos Item": item.total_item_kilos
-      }));
-    }).flat();
+    }
+    
+    return exportData;
   }
 };
-
