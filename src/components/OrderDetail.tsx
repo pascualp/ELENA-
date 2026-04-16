@@ -225,12 +225,6 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
             </tfoot>
           </table>
         </div>
-
-        {/* Footer for Print */}
-        <div className="hidden print:block mt-16 pt-8 border-t border-slate-200 text-center text-sm text-slate-400">
-          <p>Gracias por su preferencia</p>
-          <p className="text-xs mt-1">Generado por GestorPro - {new Date().toLocaleString('es-ES')}</p>
-        </div>
       </div>
     </div>
   );
