@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    margin: 1cm;
+    size: auto;
+  }
+  
+  /* Esto oculta las cabeceras y pies de página automáticos del navegador (fecha, URL, título) */
+  html, body {
+    height: 100vh;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+}
