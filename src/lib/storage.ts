@@ -1,182 +1,202 @@
-import { db } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { Order, OrderItem } from '../types';
 
 export const storage = {
   getOrders: async (): Promise<Order[]> => {
-    const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    try {
+      const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'orders');
+      return [];
+    }
   },
 
   getOrder: async (id: string): Promise<Order | null> => {
-    const docRef = doc(db, 'orders', id);
-    const docSnap = await getDoc(docRef);
-    if (!docSnap.exists()) return null;
+    try {
+      const docRef = doc(db, 'orders', id);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return null;
 
-    const order = { id: docSnap.id, ...docSnap.data() } as Order;
+      const order = { id: docSnap.id, ...docSnap.data() } as Order;
 
-    const itemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
-    order.items = itemsSnap.docs.map(itemDoc => ({ id: itemDoc.id, ...itemDoc.data() } as OrderItem));
+      const itemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
+      order.items = itemsSnap.docs.map(itemDoc => ({ id: itemDoc.id, ...itemDoc.data() } as OrderItem));
 
-    return order;
+      return order;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `orders/${id}`);
+      return null;
+    }
   },
 
   createOrder: async (orderData: Omit<Order, 'id' | 'created_at' | 'status' | 'total_kilos' | 'total_amount'>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]): Promise<Order> => {
-    let totalKilos = 0;
-    let totalAmount = 0;
-    items.forEach(item => {
-      const qty = Number(item.quantity) || 1;
-      const kpu = Number(item.kilos_per_unit) || 0;
-      const tare = Number(item.tare) || 0;
-      const price = Number(item.price) || 0;
-      
-      let itemKilos = 0;
-      let itemTotal = 0;
-      
-      if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
-        itemTotal = itemKilos * price;
-      } else {
-        itemTotal = qty * price;
-      }
-      
-      totalKilos += itemKilos;
-      totalAmount += itemTotal;
-    });
+    try {
+      let totalKilos = 0;
+      let totalAmount = 0;
+      items.forEach(item => {
+        const qty = Number(item.quantity) || 1;
+        const kpu = Number(item.kilos_per_unit) || 0;
+        const tare = Number(item.tare) || 0;
+        const price = Number(item.price) || 0;
+        
+        let itemKilos = 0;
+        let itemTotal = 0;
+        
+        if (kpu > 0) {
+          itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
+          itemTotal = itemKilos * price;
+        } else {
+          itemTotal = qty * price;
+        }
+        
+        totalKilos += itemKilos;
+        totalAmount += itemTotal;
+      });
 
-    const orderRef = doc(collection(db, 'orders'));
-    const newOrder: any = {
-      customer_name: orderData.customer_name,
-      notes: orderData.notes,
-      status: 'pending',
-      total_kilos: totalKilos,
-      total_amount: totalAmount,
-      created_at: new Date().toISOString()
-    };
-
-    const batch = writeBatch(db);
-    batch.set(orderRef, newOrder);
-
-    const insertedItems: OrderItem[] = [];
-    items.forEach(item => {
-      const itemRef = doc(collection(db, 'orders', orderRef.id, 'items'));
-      const qty = Number(item.quantity) || 1;
-      const kpu = Number(item.kilos_per_unit) || 0;
-      const tare = Number(item.tare) || 0;
-      const price = Number(item.price) || 0;
-      
-      let itemKilos = 0;
-      let itemTotal = 0;
-      
-      if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
-        itemTotal = itemKilos * price;
-      } else {
-        itemTotal = qty * price;
-      }
-
-      const newItem = {
-        product_name: item.product_name,
-        quantity: qty,
-        kilos_per_unit: kpu,
-        tare: tare,
-        price: price,
-        total_item_kilos: itemKilos,
-        total_price: itemTotal,
-        lot_number: item.lot_number,
-        is_box: item.is_box
+      const orderRef = doc(collection(db, 'orders'));
+      const newOrder: any = {
+        customer_name: orderData.customer_name,
+        notes: orderData.notes,
+        status: 'pending',
+        total_kilos: totalKilos,
+        total_amount: totalAmount,
+        created_at: new Date().toISOString()
       };
-      batch.set(itemRef, newItem);
-      insertedItems.push({ id: itemRef.id, order_id: orderRef.id, ...newItem });
-    });
 
-    await batch.commit();
+      const batch = writeBatch(db);
+      batch.set(orderRef, newOrder);
 
-    return { id: orderRef.id, ...newOrder, items: insertedItems };
+      const insertedItems: OrderItem[] = [];
+      items.forEach(item => {
+        const itemRef = doc(collection(db, 'orders', orderRef.id, 'items'));
+        const qty = Number(item.quantity) || 1;
+        const kpu = Number(item.kilos_per_unit) || 0;
+        const tare = Number(item.tare) || 0;
+        const price = Number(item.price) || 0;
+        
+        let itemKilos = 0;
+        let itemTotal = 0;
+        
+        if (kpu > 0) {
+          itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
+          itemTotal = itemKilos * price;
+        } else {
+          itemTotal = qty * price;
+        }
+
+        const newItem = {
+          product_name: item.product_name,
+          quantity: qty,
+          kilos_per_unit: kpu,
+          tare: tare,
+          price: price,
+          total_item_kilos: itemKilos,
+          total_price: itemTotal,
+          lot_number: item.lot_number,
+          is_box: item.is_box
+        };
+        batch.set(itemRef, newItem);
+        insertedItems.push({ id: itemRef.id, order_id: orderRef.id, ...newItem });
+      });
+
+      await batch.commit();
+
+      return { id: orderRef.id, ...newOrder, items: insertedItems };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'orders');
+      throw error;
+    }
   },
 
   updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]): Promise<Order> => {
-    let totalKilos = 0;
-    let totalAmount = 0;
-    items.forEach(item => {
-      const qty = Number(item.quantity) || 1;
-      const kpu = Number(item.kilos_per_unit) || 0;
-      const tare = Number(item.tare) || 0;
-      const price = Number(item.price) || 0;
-      
-      let itemKilos = 0;
-      let itemTotal = 0;
-      
-      if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
-        itemTotal = itemKilos * price;
-      } else {
-        itemTotal = qty * price;
-      }
-      
-      totalKilos += itemKilos;
-      totalAmount += itemTotal;
-    });
+    try {
+      let totalKilos = 0;
+      let totalAmount = 0;
+      items.forEach(item => {
+        const qty = Number(item.quantity) || 1;
+        const kpu = Number(item.kilos_per_unit) || 0;
+        const tare = Number(item.tare) || 0;
+        const price = Number(item.price) || 0;
+        
+        let itemKilos = 0;
+        let itemTotal = 0;
+        
+        if (kpu > 0) {
+          itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
+          itemTotal = itemKilos * price;
+        } else {
+          itemTotal = qty * price;
+        }
+        
+        totalKilos += itemKilos;
+        totalAmount += itemTotal;
+      });
 
-    const orderRef = doc(db, 'orders', id);
-    const batch = writeBatch(db);
+      const orderRef = doc(db, 'orders', id);
+      const batch = writeBatch(db);
 
-    const updatedOrderData = {
-      customer_name: orderData.customer_name,
-      notes: orderData.notes,
-      total_kilos: totalKilos,
-      total_amount: totalAmount
-    };
-
-    batch.update(orderRef, updatedOrderData);
-
-    // Delete old items
-    const oldItemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
-    oldItemsSnap.docs.forEach(itemDoc => {
-      batch.delete(itemDoc.ref);
-    });
-
-    // Insert new items
-    const insertedItems: OrderItem[] = [];
-    items.forEach(item => {
-      const itemRef = doc(collection(db, 'orders', id, 'items'));
-      const qty = Number(item.quantity) || 1;
-      const kpu = Number(item.kilos_per_unit) || 0;
-      const tare = Number(item.tare) || 0;
-      const price = Number(item.price) || 0;
-      
-      let itemKilos = 0;
-      let itemTotal = 0;
-      
-      if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
-        itemTotal = itemKilos * price;
-      } else {
-        itemTotal = qty * price;
-      }
-
-      const newItem = {
-        product_name: item.product_name,
-        quantity: qty,
-        kilos_per_unit: kpu,
-        tare: tare,
-        price: price,
-        total_item_kilos: itemKilos,
-        total_price: itemTotal,
-        lot_number: item.lot_number,
-        is_box: item.is_box
+      const updatedOrderData = {
+        customer_name: orderData.customer_name,
+        notes: orderData.notes,
+        total_kilos: totalKilos,
+        total_amount: totalAmount
       };
-      batch.set(itemRef, newItem);
-      insertedItems.push({ id: itemRef.id, order_id: id, ...newItem });
-    });
 
-    await batch.commit();
-    
-    // Get the full order to return
-    const finalOrder = await storage.getOrder(id);
-    if (!finalOrder) throw new Error("Order not found after update");
-    return finalOrder;
+      batch.update(orderRef, updatedOrderData);
+
+      // Delete old items
+      const oldItemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
+      oldItemsSnap.docs.forEach(itemDoc => {
+        batch.delete(itemDoc.ref);
+      });
+
+      // Insert new items
+      const insertedItems: OrderItem[] = [];
+      items.forEach(item => {
+        const itemRef = doc(collection(db, 'orders', id, 'items'));
+        const qty = Number(item.quantity) || 1;
+        const kpu = Number(item.kilos_per_unit) || 0;
+        const tare = Number(item.tare) || 0;
+        const price = Number(item.price) || 0;
+        
+        let itemKilos = 0;
+        let itemTotal = 0;
+        
+        if (kpu > 0) {
+          itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
+          itemTotal = itemKilos * price;
+        } else {
+          itemTotal = qty * price;
+        }
+
+        const newItem = {
+          product_name: item.product_name,
+          quantity: qty,
+          kilos_per_unit: kpu,
+          tare: tare,
+          price: price,
+          total_item_kilos: itemKilos,
+          total_price: itemTotal,
+          lot_number: item.lot_number,
+          is_box: item.is_box
+        };
+        batch.set(itemRef, newItem);
+        insertedItems.push({ id: itemRef.id, order_id: id, ...newItem });
+      });
+
+      await batch.commit();
+      
+      // Get the full order to return
+      const finalOrder = await storage.getOrder(id);
+      if (!finalOrder) throw new Error("Order not found after update");
+      return finalOrder;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `orders/${id}`);
+      throw error;
+    }
   },
 
   updateStatus: async (id: string, status: string) => {
