@@ -63,9 +63,9 @@ export default function App() {
     );
   }
 
-  const handleOrderCreated = () => {
+  const handleOrderCreated = (order: Order) => {
     setEditingOrder(null);
-    setActiveTab('orders');
+    handleSelectOrder(order);
   };
 
   const handleSelectOrder = (order: Order) => {

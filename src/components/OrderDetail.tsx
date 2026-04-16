@@ -61,7 +61,7 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
       "Tipo": item.is_box ? "Caja" : "Unidad",
       "Cantidad": item.quantity,
       "Kg/Unidad": item.kilos_per_unit,
-      "Tara": item.tare || 0,
+      "Tara": (Number(item.tare) || 0) * (Number(item.quantity) || 1),
       "Total Kg Item": item.total_item_kilos,
       "Precio/Kg": item.price || 0,
       "Total Importe Item": item.total_price || 0,
@@ -204,7 +204,7 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
                   </td>
                   <td className="py-4 text-right text-slate-600">{item.quantity}</td>
                   <td className="py-4 text-right text-slate-600">{item.kilos_per_unit.toFixed(2)}</td>
-                  <td className="py-4 text-right text-slate-400 text-xs">-{item.tare?.toFixed(2)}</td>
+                  <td className="py-4 text-right text-slate-400 text-xs">-{((Number(item.tare) || 0) * (Number(item.quantity) || 1)).toFixed(2)}</td>
                   <td className="py-4 text-right font-mono text-slate-900">{item.total_item_kilos?.toFixed(2)}</td>
                   <td className="py-4 text-right text-slate-600">{item.price?.toFixed(2)}€</td>
                   <td className="py-4 text-right font-mono font-medium text-emerald-600">{item.total_price?.toFixed(2)}€</td>

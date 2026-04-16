@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Calculator, X, List, LayoutDashboard, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, Save, Calculator, X, List, LayoutDashboard, TrendingUp, Edit2 } from 'lucide-react';
 import { OrderItem, Order } from '../types';
 import { storage } from '../lib/storage';
 
 interface OrderFormProps {
-  onOrderCreated: () => void;
+  onOrderCreated: (order: Order) => void;
   initialOrder?: Order | null;
   onCancel?: () => void;
   onViewHistory?: () => void;
@@ -80,6 +80,13 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     resetCurrentItem();
   };
 
+  const editItem = (index: number) => {
+    const itemToEdit = items[index];
+    setCurrentItem({ ...itemToEdit });
+    setItems(items.filter((_, i) => i !== index));
+    lotInputRef.current?.focus();
+  };
+
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
   };
@@ -108,12 +115,21 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     }
   };
 
+  const handleCheckboxKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      if (currentItem.product_name) {
+        e.preventDefault();
+        addItemToList();
+      }
+    }
+  };
+
   const calculateTotalKilos = () => {
     return items.reduce((acc, item) => {
       const qty = Number(item.quantity) || 1;
       const kpu = Number(item.kilos_per_unit) || 0;
       const tare = Number(item.tare) || 0;
-      const netKilos = Math.max(0, (qty * kpu) - tare);
+      const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
       return acc + netKilos;
     }, 0);
   };
@@ -126,7 +142,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       const price = Number(item.price) || 0;
       
       if (kpu > 0) {
-        const netKilos = Math.max(0, (qty * kpu) - tare);
+        const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
         return acc + (netKilos * price);
       } else {
         return acc + (qty * price);
@@ -143,18 +159,19 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     setIsSubmitting(true);
 
     try {
+      let savedOrder: Order;
       if (initialOrder) {
-        await storage.updateOrder(initialOrder.id, { customer_name: customerName, notes }, items);
+        savedOrder = await storage.updateOrder(initialOrder.id, { customer_name: customerName, notes }, items);
         alert('Pedido actualizado correctamente');
       } else {
-        await storage.createOrder({ customer_name: customerName, notes }, items);
+        savedOrder = await storage.createOrder({ customer_name: customerName, notes }, items);
         alert('Pedido guardado correctamente');
         setCustomerName('');
         setNotes('');
         setItems([]);
         resetCurrentItem();
       }
-      onOrderCreated();
+      onOrderCreated(savedOrder);
     } catch (error: any) {
       console.error(error);
       alert(`Error al guardar el pedido: ${error.message || 'Error desconocido'}`);
@@ -313,6 +330,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                     type="checkbox"
                     checked={currentItem.is_box}
                     onChange={(e) => updateCurrentItem('is_box', e.target.checked)}
+                    onKeyDown={handleCheckboxKeyDown}
                     className="w-6 h-6 text-emerald-600 rounded focus:ring-emerald-500 border-gray-300"
                   />
                 </label>
@@ -363,7 +381,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                       const kpu = Number(item.kilos_per_unit) || 0;
                       const tare = Number(item.tare) || 0;
                       const price = Number(item.price) || 0;
-                      const netKilos = Math.max(0, (qty * kpu) - tare);
+                      const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
                       const subtotal = kpu > 0 ? netKilos * price : qty * price;
 
                       return (
@@ -379,20 +397,31 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                           </td>
                           <td className="px-4 py-4 text-base text-right text-slate-700 font-medium">{qty}</td>
                           <td className="px-4 py-4 text-base text-right text-slate-700">{kpu > 0 ? kpu.toFixed(2) : '-'}</td>
-                          <td className="px-4 py-4 text-base text-right text-red-400 font-medium">-{tare.toFixed(2)}</td>
+                          <td className="px-4 py-4 text-base text-right text-red-400 font-medium">-{ (qty * tare).toFixed(2) }</td>
                           <td className="px-4 py-4 text-base text-right font-mono font-bold text-slate-900">
                             {kpu > 0 ? `${netKilos.toFixed(2)}kg` : '-'}
                           </td>
                           <td className="px-4 py-4 text-base text-right text-slate-700 font-medium">{price.toFixed(2)}€</td>
                           <td className="px-4 py-4 text-lg text-right font-mono font-black text-emerald-600">{subtotal.toFixed(2)}€</td>
                           <td className="px-4 py-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <Trash2 size={20} />
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => editItem(index)}
+                                className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Editar línea"
+                              >
+                                <Edit2 size={20} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(index)}
+                                className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                title="Eliminar línea"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

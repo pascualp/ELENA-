@@ -35,7 +35,7 @@ export const storage = {
       let itemTotal = 0;
       
       if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
         itemTotal = itemKilos * price;
       } else {
         itemTotal = qty * price;
@@ -70,7 +70,7 @@ export const storage = {
       let itemTotal = 0;
       
       if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
         itemTotal = itemKilos * price;
       } else {
         itemTotal = qty * price;
@@ -96,7 +96,7 @@ export const storage = {
     return { id: orderRef.id, ...newOrder, items: insertedItems };
   },
 
-  updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]) => {
+  updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]): Promise<Order> => {
     let totalKilos = 0;
     let totalAmount = 0;
     items.forEach(item => {
@@ -109,7 +109,7 @@ export const storage = {
       let itemTotal = 0;
       
       if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
         itemTotal = itemKilos * price;
       } else {
         itemTotal = qty * price;
@@ -122,12 +122,14 @@ export const storage = {
     const orderRef = doc(db, 'orders', id);
     const batch = writeBatch(db);
 
-    batch.update(orderRef, {
+    const updatedOrderData = {
       customer_name: orderData.customer_name,
       notes: orderData.notes,
       total_kilos: totalKilos,
       total_amount: totalAmount
-    });
+    };
+
+    batch.update(orderRef, updatedOrderData);
 
     // Delete old items
     const oldItemsSnap = await getDocs(collection(db, 'orders', id, 'items'));
@@ -136,6 +138,7 @@ export const storage = {
     });
 
     // Insert new items
+    const insertedItems: OrderItem[] = [];
     items.forEach(item => {
       const itemRef = doc(collection(db, 'orders', id, 'items'));
       const qty = Number(item.quantity) || 1;
@@ -147,13 +150,13 @@ export const storage = {
       let itemTotal = 0;
       
       if (kpu > 0) {
-        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemKilos = Math.max(0, (qty * kpu) - (qty * tare));
         itemTotal = itemKilos * price;
       } else {
         itemTotal = qty * price;
       }
 
-      batch.set(itemRef, {
+      const newItem = {
         product_name: item.product_name,
         quantity: qty,
         kilos_per_unit: kpu,
@@ -163,10 +166,17 @@ export const storage = {
         total_price: itemTotal,
         lot_number: item.lot_number,
         is_box: item.is_box
-      });
+      };
+      batch.set(itemRef, newItem);
+      insertedItems.push({ id: itemRef.id, order_id: id, ...newItem });
     });
 
     await batch.commit();
+    
+    // Get the full order to return
+    const finalOrder = await storage.getOrder(id);
+    if (!finalOrder) throw new Error("Order not found after update");
+    return finalOrder;
   },
 
   updateStatus: async (id: string, status: string) => {
@@ -298,7 +308,7 @@ export const storage = {
             "Es Caja": item.is_box ? "Sí" : "No",
             "Cantidad": item.quantity,
             "Kg por Unidad": item.kilos_per_unit,
-            "Tara": item.tare || 0,
+            "Tara": (Number(item.tare) || 0) * (Number(item.quantity) || 1),
             "Precio": item.price || 0,
             "Total Kilos Item": item.total_item_kilos,
             "Total Importe Item": item.total_price || 0
