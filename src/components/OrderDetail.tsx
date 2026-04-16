@@ -61,8 +61,12 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
       "Tipo": item.is_box ? "Caja" : "Unidad",
       "Cantidad": item.quantity,
       "Kg/Unidad": item.kilos_per_unit,
+      "Tara": item.tare || 0,
       "Total Kg Item": item.total_item_kilos,
-      "Total Kg Pedido": order.total_kilos
+      "Precio/Kg": item.price || 0,
+      "Total Importe Item": item.total_price || 0,
+      "Total Kg Pedido": order.total_kilos,
+      "Total Importe Pedido": order.total_amount || 0
     }));
 
     if (data) {
@@ -74,7 +78,8 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
       const wscols = [
         {wch: 10}, {wch: 20}, {wch: 12}, {wch: 10}, {wch: 10}, 
         {wch: 20}, {wch: 20}, {wch: 15}, {wch: 10}, {wch: 10}, 
-        {wch: 10}, {wch: 15}, {wch: 15}
+        {wch: 10}, {wch: 10}, {wch: 15}, {wch: 10}, {wch: 15},
+        {wch: 15}, {wch: 15}
       ];
       worksheet['!cols'] = wscols;
 
@@ -86,7 +91,7 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
   if (!order) return <div className="p-8 text-center text-red-500">Pedido no encontrado</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* Action Bar - Hidden when printing */}
       <div className="flex justify-between items-center print:hidden">
         <div className="flex gap-4">
@@ -168,46 +173,58 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
         </div>
 
         {/* Items Table */}
-        <table className="w-full mb-8">
-          <thead>
-            <tr className="border-b-2 border-slate-100">
-              <th className="text-left py-3 text-sm font-semibold text-slate-600">Producto</th>
-              <th className="text-left py-3 text-sm font-semibold text-slate-600">Lote</th>
-              <th className="text-center py-3 text-sm font-semibold text-slate-600">Tipo</th>
-              <th className="text-right py-3 text-sm font-semibold text-slate-600">Cantidad</th>
-              <th className="text-right py-3 text-sm font-semibold text-slate-600">Kg/Unidad</th>
-              <th className="text-right py-3 text-sm font-semibold text-slate-600">Total Kg</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {order.items?.map((item, index) => (
-              <tr key={index}>
-                <td className="py-4 text-slate-800">{item.product_name}</td>
-                <td className="py-4 text-slate-600 text-sm">{item.lot_number || '-'}</td>
-                <td className="py-4 text-center text-slate-600 text-sm">
-                  {item.is_box ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                      Caja
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">Unidad</span>
-                  )}
-                </td>
-                <td className="py-4 text-right text-slate-600">{item.quantity}</td>
-                <td className="py-4 text-right text-slate-600">{item.kilos_per_unit.toFixed(2)}</td>
-                <td className="py-4 text-right font-mono font-medium text-slate-900">{item.total_item_kilos?.toFixed(2)}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full mb-8 min-w-[600px]">
+            <thead>
+              <tr className="border-b-2 border-slate-100">
+                <th className="text-left py-3 text-sm font-semibold text-slate-600">Producto</th>
+                <th className="text-left py-3 text-sm font-semibold text-slate-600">Lote</th>
+                <th className="text-center py-3 text-sm font-semibold text-slate-600">Tipo</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Cant.</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Kg/Unid</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Tara</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Neto</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Precio</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Subtotal</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-slate-100">
-              <td colSpan={5} className="py-4 text-right font-bold text-slate-800">Total Peso Neto</td>
-              <td className="py-4 text-right font-mono font-bold text-xl text-emerald-600">
-                {order.total_kilos.toFixed(2)} kg
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {order.items?.map((item, index) => (
+                <tr key={index}>
+                  <td className="py-4 text-slate-800">{item.product_name}</td>
+                  <td className="py-4 text-slate-600 text-sm">{item.lot_number || '-'}</td>
+                  <td className="py-4 text-center text-slate-600 text-sm">
+                    {item.is_box ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                        Caja
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">Unidad</span>
+                    )}
+                  </td>
+                  <td className="py-4 text-right text-slate-600">{item.quantity}</td>
+                  <td className="py-4 text-right text-slate-600">{item.kilos_per_unit.toFixed(2)}</td>
+                  <td className="py-4 text-right text-slate-400 text-xs">-{item.tare?.toFixed(2)}</td>
+                  <td className="py-4 text-right font-mono text-slate-900">{item.total_item_kilos?.toFixed(2)}</td>
+                  <td className="py-4 text-right text-slate-600">{item.price?.toFixed(2)}€</td>
+                  <td className="py-4 text-right font-mono font-medium text-emerald-600">{item.total_price?.toFixed(2)}€</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-100">
+                <td colSpan={6} className="py-4 text-right font-bold text-slate-800">Totales</td>
+                <td className="py-4 text-right font-mono font-bold text-lg text-slate-900">
+                  {order.total_kilos.toFixed(2)} kg
+                </td>
+                <td></td>
+                <td className="py-4 text-right font-mono font-bold text-xl text-emerald-600">
+                  {(order.total_amount || 0).toFixed(2)} €
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
 
         {/* Footer for Print */}
         <div className="hidden print:block mt-16 pt-8 border-t border-slate-200 text-center text-sm text-slate-400">

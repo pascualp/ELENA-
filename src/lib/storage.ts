@@ -22,10 +22,27 @@ export const storage = {
     return order;
   },
 
-  createOrder: async (orderData: Omit<Order, 'id' | 'created_at' | 'status' | 'total_kilos'>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos'>[]): Promise<Order> => {
+  createOrder: async (orderData: Omit<Order, 'id' | 'created_at' | 'status' | 'total_kilos' | 'total_amount'>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]): Promise<Order> => {
     let totalKilos = 0;
+    let totalAmount = 0;
     items.forEach(item => {
-      totalKilos += (item.quantity * item.kilos_per_unit);
+      const qty = Number(item.quantity) || 1;
+      const kpu = Number(item.kilos_per_unit) || 0;
+      const tare = Number(item.tare) || 0;
+      const price = Number(item.price) || 0;
+      
+      let itemKilos = 0;
+      let itemTotal = 0;
+      
+      if (kpu > 0) {
+        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemTotal = itemKilos * price;
+      } else {
+        itemTotal = qty * price;
+      }
+      
+      totalKilos += itemKilos;
+      totalAmount += itemTotal;
     });
 
     const orderRef = doc(collection(db, 'orders'));
@@ -34,6 +51,7 @@ export const storage = {
       notes: orderData.notes,
       status: 'pending',
       total_kilos: totalKilos,
+      total_amount: totalAmount,
       created_at: new Date().toISOString()
     };
 
@@ -43,11 +61,29 @@ export const storage = {
     const insertedItems: OrderItem[] = [];
     items.forEach(item => {
       const itemRef = doc(collection(db, 'orders', orderRef.id, 'items'));
+      const qty = Number(item.quantity) || 1;
+      const kpu = Number(item.kilos_per_unit) || 0;
+      const tare = Number(item.tare) || 0;
+      const price = Number(item.price) || 0;
+      
+      let itemKilos = 0;
+      let itemTotal = 0;
+      
+      if (kpu > 0) {
+        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemTotal = itemKilos * price;
+      } else {
+        itemTotal = qty * price;
+      }
+
       const newItem = {
         product_name: item.product_name,
-        quantity: item.quantity,
-        kilos_per_unit: item.kilos_per_unit,
-        total_item_kilos: item.quantity * item.kilos_per_unit,
+        quantity: qty,
+        kilos_per_unit: kpu,
+        tare: tare,
+        price: price,
+        total_item_kilos: itemKilos,
+        total_price: itemTotal,
         lot_number: item.lot_number,
         is_box: item.is_box
       };
@@ -60,10 +96,27 @@ export const storage = {
     return { id: orderRef.id, ...newOrder, items: insertedItems };
   },
 
-  updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos'>[]) => {
+  updateOrder: async (id: string, orderData: Partial<Order>, items: Omit<OrderItem, 'id' | 'order_id' | 'total_item_kilos' | 'total_price'>[]) => {
     let totalKilos = 0;
+    let totalAmount = 0;
     items.forEach(item => {
-      totalKilos += (item.quantity * item.kilos_per_unit);
+      const qty = Number(item.quantity) || 1;
+      const kpu = Number(item.kilos_per_unit) || 0;
+      const tare = Number(item.tare) || 0;
+      const price = Number(item.price) || 0;
+      
+      let itemKilos = 0;
+      let itemTotal = 0;
+      
+      if (kpu > 0) {
+        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemTotal = itemKilos * price;
+      } else {
+        itemTotal = qty * price;
+      }
+      
+      totalKilos += itemKilos;
+      totalAmount += itemTotal;
     });
 
     const orderRef = doc(db, 'orders', id);
@@ -72,7 +125,8 @@ export const storage = {
     batch.update(orderRef, {
       customer_name: orderData.customer_name,
       notes: orderData.notes,
-      total_kilos: totalKilos
+      total_kilos: totalKilos,
+      total_amount: totalAmount
     });
 
     // Delete old items
@@ -84,11 +138,29 @@ export const storage = {
     // Insert new items
     items.forEach(item => {
       const itemRef = doc(collection(db, 'orders', id, 'items'));
+      const qty = Number(item.quantity) || 1;
+      const kpu = Number(item.kilos_per_unit) || 0;
+      const tare = Number(item.tare) || 0;
+      const price = Number(item.price) || 0;
+      
+      let itemKilos = 0;
+      let itemTotal = 0;
+      
+      if (kpu > 0) {
+        itemKilos = Math.max(0, (qty * kpu) - tare);
+        itemTotal = itemKilos * price;
+      } else {
+        itemTotal = qty * price;
+      }
+
       batch.set(itemRef, {
         product_name: item.product_name,
-        quantity: item.quantity,
-        kilos_per_unit: item.kilos_per_unit,
-        total_item_kilos: item.quantity * item.kilos_per_unit,
+        quantity: qty,
+        kilos_per_unit: kpu,
+        tare: tare,
+        price: price,
+        total_item_kilos: itemKilos,
+        total_price: itemTotal,
         lot_number: item.lot_number,
         is_box: item.is_box
       });
@@ -200,12 +272,16 @@ export const storage = {
           "Estado": order.status,
           "Notas": order.notes,
           "Total Kilos Pedido": order.total_kilos,
+          "Importe Total Pedido": order.total_amount || 0,
           "Producto": "",
           "Lote": "",
           "Es Caja": "",
           "Cantidad": "",
           "Kg por Unidad": "",
-          "Total Kilos Item": ""
+          "Tara": "",
+          "Precio": "",
+          "Total Kilos Item": "",
+          "Total Importe Item": ""
         });
       } else {
         items.forEach(item => {
@@ -216,12 +292,16 @@ export const storage = {
             "Estado": order.status,
             "Notas": order.notes,
             "Total Kilos Pedido": order.total_kilos,
+            "Importe Total Pedido": order.total_amount || 0,
             "Producto": item.product_name,
             "Lote": item.lot_number,
             "Es Caja": item.is_box ? "Sí" : "No",
             "Cantidad": item.quantity,
             "Kg por Unidad": item.kilos_per_unit,
-            "Total Kilos Item": item.total_item_kilos
+            "Tara": item.tare || 0,
+            "Precio": item.price || 0,
+            "Total Kilos Item": item.total_item_kilos,
+            "Total Importe Item": item.total_price || 0
           });
         });
       }

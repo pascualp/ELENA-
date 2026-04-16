@@ -144,28 +144,27 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                 <th className="px-6 py-4">Cliente</th>
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4 text-right">Total Kilos</th>
+                <th className="px-6 py-4 text-right">Importe</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">Cargando pedidos...</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">Cargando pedidos...</td>
                 </tr>
               ) : errorMsg ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-red-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-red-500">
                     <div className="font-bold mb-2">Error al cargar pedidos</div>
                     <div className="text-sm max-w-md mx-auto bg-red-50 p-4 rounded-lg border border-red-100 text-slate-600">
                       {errorMsg}
-                      <br/><br/>
-                      <strong>Nota:</strong> Si usas Supabase gratuito, tu proyecto puede estar pausado por inactividad.
                     </div>
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">No se encontraron pedidos</td>
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">No se encontraron pedidos</td>
                 </tr>
               ) : (
                 filteredOrders.map((order) => (
@@ -184,6 +183,9 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                     </td>
                     <td className="px-6 py-4 text-right font-mono font-medium text-slate-700">
                       {order.total_kilos.toFixed(2)} kg
+                    </td>
+                    <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">
+                      {(order.total_amount || 0).toFixed(2)} €
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

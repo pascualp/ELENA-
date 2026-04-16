@@ -2,9 +2,12 @@ export interface OrderItem {
   id?: string;
   order_id?: string;
   product_name: string;
-  quantity: number;
-  kilos_per_unit: number;
+  quantity: number | string;
+  kilos_per_unit: number | string;
+  tare: number | string;
+  price: number | string;
   total_item_kilos?: number;
+  total_price?: number;
   lot_number: string;
   is_box: boolean;
 }
@@ -15,6 +18,7 @@ export interface Order {
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
   created_at: string;
   total_kilos: number;
+  total_amount: number;
   notes: string;
   items?: OrderItem[];
 }
