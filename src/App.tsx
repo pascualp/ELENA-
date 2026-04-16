@@ -33,7 +33,11 @@ export default function App() {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error('Error signing in:', error);
-      alert(`Error al iniciar sesión: ${error.message || 'Error desconocido'}\n\nSi el error es "auth/unauthorized-domain", necesitas añadir tu dominio de Vercel en la consola de Firebase.`);
+      if (error.code === 'auth/unauthorized-domain') {
+        alert(`ERROR DE DOMINIO: Tu web en Vercel no tiene permiso todavía.\n\n1. Ve a: https://console.firebase.google.com/project/gen-lang-client-0061028494/auth/settings\n2. Busca la pestaña "Settings" -> "Authorized domains".\n3. Añade: elena-qak1-hopezcizs-pascualps-projects.vercel.app`);
+      } else {
+        alert(`Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
+      }
     }
   };
 
