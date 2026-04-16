@@ -162,10 +162,8 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       let savedOrder: Order;
       if (initialOrder) {
         savedOrder = await storage.updateOrder(initialOrder.id, { customer_name: customerName, notes }, items);
-        alert('Pedido actualizado correctamente');
       } else {
         savedOrder = await storage.createOrder({ customer_name: customerName, notes }, items);
-        alert('Pedido guardado correctamente');
         setCustomerName('');
         setNotes('');
         setItems([]);
@@ -181,7 +179,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
   };
 
   return (
-    <div className="max-w-6xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+    <div className="w-full mx-auto bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">

@@ -223,6 +223,7 @@ export const storage = {
     
     const totalOrders = orders.length;
     const totalKilos = orders.reduce((acc, o) => acc + (o.total_kilos || 0), 0);
+    const totalAmount = orders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
 
     // Daily stats (last 7 days)
     const dailyStats = [];
@@ -236,19 +237,24 @@ export const storage = {
       dailyStats.push({
         date: dateStr,
         count: ordersThatDay.length,
-        kilos: ordersThatDay.reduce((acc, o) => acc + (o.total_kilos || 0), 0)
+        kilos: ordersThatDay.reduce((acc, o) => acc + (o.total_kilos || 0), 0),
+        amount: ordersThatDay.reduce((acc, o) => acc + (o.total_amount || 0), 0)
       });
     }
 
     // Top Customers
-    const customerMap: Record<string, number> = {};
+    const customerMap: Record<string, {kilos: number, amount: number}> = {};
     orders.forEach(o => {
       if (o.customer_name) {
-        customerMap[o.customer_name] = (customerMap[o.customer_name] || 0) + (o.total_kilos || 0);
+        if (!customerMap[o.customer_name]) {
+          customerMap[o.customer_name] = { kilos: 0, amount: 0 };
+        }
+        customerMap[o.customer_name].kilos += (o.total_kilos || 0);
+        customerMap[o.customer_name].amount += (o.total_amount || 0);
       }
     });
     const topCustomers = Object.entries(customerMap)
-      .map(([name, kilos]) => ({ name, kilos }))
+      .map(([name, data]) => ({ name, kilos: data.kilos, amount: data.amount }))
       .sort((a, b) => b.kilos - a.kilos)
       .slice(0, 5);
 
@@ -271,6 +277,7 @@ export const storage = {
     return { 
       totalOrders, 
       totalKilos, 
+      totalAmount,
       dailyStats,
       topCustomers,
       topProducts

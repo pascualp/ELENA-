@@ -169,7 +169,7 @@ export default function App() {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 print:overflow-visible print:p-0">
-          <div className="max-w-7xl mx-auto print:max-w-none">
+          <div className="max-w-[1400px] w-full mx-auto print:max-w-none">
             {renderContent()}
           </div>
         </main>

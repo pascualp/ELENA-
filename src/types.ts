@@ -26,14 +26,17 @@ export interface Order {
 export interface Stats {
   totalOrders: number;
   totalKilos: number;
+  totalAmount: number;
   dailyStats: {
     date: string;
     kilos: number;
     count: number;
+    amount: number;
   }[];
   topCustomers: {
     name: string;
     kilos: number;
+    amount: number;
   }[];
   topProducts: {
     name: string;
