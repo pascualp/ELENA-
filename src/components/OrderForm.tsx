@@ -129,7 +129,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       const qty = Number(item.quantity) || 1;
       const kpu = Number(item.kilos_per_unit) || 0;
       const tare = Number(item.tare) || 0;
-      const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
+      const netKilos = Math.max(0, kpu - (qty * tare));
       return acc + netKilos;
     }, 0);
   };
@@ -142,7 +142,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       const price = Number(item.price) || 0;
       
       if (kpu > 0) {
-        const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
+        const netKilos = Math.max(0, kpu - (qty * tare));
         return acc + (netKilos * price);
       } else {
         return acc + (qty * price);
@@ -289,7 +289,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-sm font-bold text-slate-700 mb-1 block">Kg/Unid</label>
+                <label className="text-sm font-bold text-slate-700 mb-1 block">Peso Bruto</label>
                 <input
                   type="number"
                   step="0.01"
@@ -365,7 +365,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                       <th className="px-4 py-4">Producto</th>
                       <th className="px-4 py-4 text-center">Tipo</th>
                       <th className="px-4 py-4 text-right">Cant.</th>
-                      <th className="px-4 py-4 text-right">Kg/Ud</th>
+                      <th className="px-4 py-4 text-right">Peso Bruto</th>
                       <th className="px-4 py-4 text-right">Tara</th>
                       <th className="px-4 py-4 text-right">Neto</th>
                       <th className="px-4 py-4 text-right">Precio</th>
@@ -379,7 +379,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                       const kpu = Number(item.kilos_per_unit) || 0;
                       const tare = Number(item.tare) || 0;
                       const price = Number(item.price) || 0;
-                      const netKilos = Math.max(0, (qty * kpu) - (qty * tare));
+                      const netKilos = Math.max(0, kpu - (qty * tare));
                       const subtotal = kpu > 0 ? netKilos * price : qty * price;
 
                       return (

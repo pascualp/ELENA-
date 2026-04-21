@@ -34,44 +34,80 @@ export function Dashboard({ onAction }: DashboardProps) {
       const allData = await storage.getAllDataForExport();
       
       const wb = XLSX.utils.book_new();
+      const todayString = new Date().toLocaleDateString('es-ES');
       
       // Resumen Stats
       if (stats) {
-        const wsStats = XLSX.utils.json_to_sheet([
-          { "Métrica": "Total Pedidos", "Valor": stats.totalOrders },
-          { "Métrica": "Total Kilos", "Valor": stats.totalKilos.toFixed(2) },
-          { "Métrica": "Importe Total", "Valor": stats.totalAmount.toFixed(2) + " €" }
+        // 1. Portada / Resumen
+        const wsStats = XLSX.utils.aoa_to_sheet([
+          ["INFORME DE RENDIMIENTO - GESTORPRO"],
+          ["Fecha de generación:", todayString],
+          [],
+          ["MÉTRICAS GLOBALES", "VALOR"],
+          ["Total de Pedidos", stats.totalOrders],
+          ["Kilos Totales Procesados", Number(stats.totalKilos.toFixed(2))],
+          ["Importe Total Generado (€)", Number(stats.totalAmount.toFixed(2))]
         ]);
-        XLSX.utils.book_append_sheet(wb, wsStats, "Resumen General");
+        wsStats['!cols'] = [{ wch: 35 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsStats, "Resumen Global");
         
-        // Ventas Diarias
+        // 2. Ventas Diarias
         const wsDaily = XLSX.utils.json_to_sheet(
           stats.dailyStats.map(s => ({
-            "Fecha": s.date,
+            "Fecha": new Date(s.date).toLocaleDateString('es-ES'),
             "Pedidos": s.count,
-            "Kilos": s.kilos.toFixed(2),
-            "Importe (€)": s.amount.toFixed(2)
+            "Kilos": Number(s.kilos.toFixed(2)),
+            "Importe (€)": Number(s.amount.toFixed(2))
           }))
         );
-        XLSX.utils.book_append_sheet(wb, wsDaily, "Resumen Diario");
+        wsDaily['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsDaily, "Rendimiento Diario");
 
-        // Top Clientes
+        // 3. Mejores Clientes
         const wsCustomers = XLSX.utils.json_to_sheet(
           stats.topCustomers.map((c, i) => ({
-            "Posición": i + 1,
+            "Ranking": i + 1,
             "Cliente": c.name,
-            "Kilos Totales": c.kilos.toFixed(2),
-            "Importe Total (€)": c.amount.toFixed(2)
+            "Kilos Totales": Number(c.kilos.toFixed(2)),
+            "Importe Total (€)": Number(c.amount.toFixed(2))
           }))
         );
-        XLSX.utils.book_append_sheet(wb, wsCustomers, "Top Clientes");
+        wsCustomers['!cols'] = [{ wch: 10 }, { wch: 35 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsCustomers, "Mejores Clientes");
+        
+        // 4. Productos Más Vendidos
+        const wsProducts = XLSX.utils.json_to_sheet(
+          stats.topProducts.map((p, i) => ({
+            "Ranking": i + 1,
+            "Producto": p.name,
+            "Kilos Totales": Number(p.kilos.toFixed(2))
+          }))
+        );
+        wsProducts['!cols'] = [{ wch: 10 }, { wch: 35 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsProducts, "Top Productos");
       }
 
-      // Todos los pedidos detallados
+      // 5. Todos los pedidos detallados
       const wsDetails = XLSX.utils.json_to_sheet(allData);
-      XLSX.utils.book_append_sheet(wb, wsDetails, "Todos los Pedidos Detalle");
+      wsDetails['!cols'] = [
+        { wch: 20 }, // ID Pedido
+        { wch: 35 }, // Cliente
+        { wch: 15 }, // Fecha
+        { wch: 15 }, // Lote
+        { wch: 25 }, // Producto
+        { wch: 10 }, // Tipo
+        { wch: 10 }, // Cant.
+        { wch: 10 }, // Kg/U
+        { wch: 10 }, // Tara
+        { wch: 15 }, // Kilos Netos
+        { wch: 15 }, // Precio
+        { wch: 15 }, // Total
+        { wch: 15 }, // Estado
+        { wch: 40 }  // Notas
+      ];
+      XLSX.utils.book_append_sheet(wb, wsDetails, "Detalle Operaciones");
 
-      XLSX.writeFile(wb, `Informe_Dashboard_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `Informe_Direccion_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e: any) {
       alert("Error exportando: " + e.message);
     }

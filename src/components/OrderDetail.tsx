@@ -181,7 +181,7 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
                 <th className="text-left py-3 text-sm font-semibold text-slate-600">Lote</th>
                 <th className="text-center py-3 text-sm font-semibold text-slate-600">Tipo</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Cant.</th>
-                <th className="text-right py-3 text-sm font-semibold text-slate-600">Kg/Unid</th>
+                <th className="text-right py-3 text-sm font-semibold text-slate-600">Peso Bruto</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Tara</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Neto</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Precio</th>
