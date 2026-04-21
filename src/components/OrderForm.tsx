@@ -17,6 +17,7 @@ const PRODUCT_CODES: Record<string, string> = {
   '4790': 'Sandia',
   '7790': 'Sandia',
   '3746': 'Piña',
+  '3745': 'PIÑA MONTE',
   '3742': 'Piña madura',
   '9032': 'Pitahaya',
   '3280': 'Coco',
