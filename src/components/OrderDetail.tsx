@@ -179,7 +179,6 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
               <tr className="border-b-2 border-slate-100">
                 <th className="text-left py-3 text-sm font-semibold text-slate-600">Producto</th>
                 <th className="text-left py-3 text-sm font-semibold text-slate-600">Lote</th>
-                <th className="text-center py-3 text-sm font-semibold text-slate-600">Tipo</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Cant.</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Peso Bruto</th>
                 <th className="text-right py-3 text-sm font-semibold text-slate-600">Tara</th>
@@ -193,15 +192,6 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
                 <tr key={index}>
                   <td className="py-4 text-slate-800">{item.product_name}</td>
                   <td className="py-4 text-slate-600 text-sm">{item.lot_number || '-'}</td>
-                  <td className="py-4 text-center text-slate-600 text-sm">
-                    {item.is_box ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                        Caja
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">Unidad</span>
-                    )}
-                  </td>
                   <td className="py-4 text-right text-slate-600">{item.quantity}</td>
                   <td className="py-4 text-right text-slate-600">{item.kilos_per_unit.toFixed(2)}</td>
                   <td className="py-4 text-right text-slate-400 text-xs">-{((Number(item.tare) || 0) * (Number(item.quantity) || 1)).toFixed(2)}</td>

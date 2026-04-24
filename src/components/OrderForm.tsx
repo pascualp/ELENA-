@@ -34,6 +34,11 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [recentCustomers, setRecentCustomers] = useState<string[]>([]);
   const lotInputRef = React.useRef<HTMLInputElement>(null);
+  const productInputRef = React.useRef<HTMLInputElement>(null);
+  const qtyInputRef = React.useRef<HTMLInputElement>(null);
+  const weightInputRef = React.useRef<HTMLInputElement>(null);
+  const tareInputRef = React.useRef<HTMLInputElement>(null);
+  const priceInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Fetch recent customers for autocomplete
@@ -109,15 +114,22 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     setCurrentItem(updatedItem);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent, nextRef?: React.RefObject<HTMLInputElement | HTMLButtonElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      addItemToList();
+      if (nextRef && nextRef.current) {
+        nextRef.current.focus();
+      } else {
+        addItemToList();
+      }
     }
   };
 
   const handleCheckboxKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Tab' && !e.shiftKey) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItemToList();
+    } else if (e.key === 'Tab' && !e.shiftKey) {
       if (currentItem.product_name) {
         e.preventDefault();
         addItemToList();
@@ -263,7 +275,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                   type="text"
                   value={currentItem.lot_number}
                   onChange={(e) => updateCurrentItem('lot_number', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e, productInputRef)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                   placeholder="Escriba aquí..."
                 />
@@ -271,10 +283,11 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
               <div className="md:col-span-3">
                 <label className="text-sm font-bold text-slate-700 mb-1 block">Producto</label>
                 <input
+                  ref={productInputRef}
                   type="text"
                   value={currentItem.product_name}
                   onChange={(e) => updateCurrentItem('product_name', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e, qtyInputRef)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                   placeholder="Nombre..."
                 />
@@ -282,57 +295,49 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
               <div className="md:col-span-1">
                 <label className="text-sm font-bold text-slate-700 mb-1 block">Cant.</label>
                 <input
+                  ref={qtyInputRef}
                   type="number"
                   value={currentItem.quantity}
                   onChange={(e) => updateCurrentItem('quantity', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e, weightInputRef)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="text-sm font-bold text-slate-700 mb-1 block">Peso Bruto</label>
                 <input
+                  ref={weightInputRef}
                   type="number"
                   step="0.01"
                   value={currentItem.kilos_per_unit}
                   onChange={(e) => updateCurrentItem('kilos_per_unit', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e, tareInputRef)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                 />
               </div>
               <div className="md:col-span-1">
                 <label className="text-sm font-bold text-slate-700 mb-1 block">Tara</label>
                 <input
+                  ref={tareInputRef}
                   type="number"
                   step="0.01"
                   value={currentItem.tare}
                   onChange={(e) => updateCurrentItem('tare', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e, priceInputRef)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="text-sm font-bold text-slate-700 mb-1 block">Precio</label>
                 <input
+                  ref={priceInputRef}
                   type="number"
                   step="0.01"
                   value={currentItem.price}
                   onChange={(e) => updateCurrentItem('price', e.target.value)}
-                  onKeyDown={handleKeyDown}
+                  onKeyDown={(e) => handleKeyDown(e)}
                   className="w-full px-3 py-2 text-lg rounded-lg border-2 border-slate-200 focus:border-emerald-500 outline-none transition-colors"
                 />
-              </div>
-              <div className="md:col-span-1 flex items-center justify-center pb-2">
-                <label className="flex flex-col items-center gap-1 cursor-pointer">
-                  <span className="text-[10px] font-black text-slate-700 uppercase">Caja</span>
-                  <input
-                    type="checkbox"
-                    checked={currentItem.is_box}
-                    onChange={(e) => updateCurrentItem('is_box', e.target.checked)}
-                    onKeyDown={handleCheckboxKeyDown}
-                    className="w-6 h-6 text-emerald-600 rounded focus:ring-emerald-500 border-gray-300"
-                  />
-                </label>
               </div>
               <div className="md:col-span-1">
                 <button
@@ -364,7 +369,6 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                     <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-black">
                       <th className="px-4 py-4">Lote</th>
                       <th className="px-4 py-4">Producto</th>
-                      <th className="px-4 py-4 text-center">Tipo</th>
                       <th className="px-4 py-4 text-right">Cant.</th>
                       <th className="px-4 py-4 text-right">Peso Bruto</th>
                       <th className="px-4 py-4 text-right">Tara</th>
@@ -387,13 +391,6 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                         <tr key={index} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="px-4 py-4 text-base text-slate-500 font-mono">{item.lot_number || '-'}</td>
                           <td className="px-4 py-4 text-base font-bold text-slate-800">{item.product_name}</td>
-                          <td className="px-4 py-4 text-center">
-                            {item.is_box ? (
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-black bg-blue-100 text-blue-700 uppercase">Caja</span>
-                            ) : (
-                              <span className="text-xs text-slate-400 uppercase font-bold">Unid</span>
-                            )}
-                          </td>
                           <td className="px-4 py-4 text-base text-right text-slate-700 font-medium">{qty}</td>
                           <td className="px-4 py-4 text-base text-right text-slate-700">{kpu > 0 ? kpu.toFixed(2) : '-'}</td>
                           <td className="px-4 py-4 text-base text-right text-red-400 font-medium">-{ (qty * tare).toFixed(2) }</td>

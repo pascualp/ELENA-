@@ -14,18 +14,20 @@ export function Dashboard({ onAction }: DashboardProps) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const data = await storage.getStats();
+      setStats(data);
+    } catch (error: any) {
+      console.error(error);
+      setErrorMsg(error.message || 'No se pudo conectar a la base de datos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const data = await storage.getStats();
-        setStats(data);
-      } catch (error: any) {
-        console.error(error);
-        setErrorMsg(error.message || 'No se pudo conectar a la base de datos');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -34,93 +36,37 @@ export function Dashboard({ onAction }: DashboardProps) {
       const allData = await storage.getAllDataForExport();
       
       const wb = XLSX.utils.book_new();
-      const todayString = new Date().toLocaleDateString('es-ES');
       
-      // Resumen Stats
-      if (stats) {
-        // 1. Portada / Resumen
-        const wsStats = XLSX.utils.aoa_to_sheet([
-          ["INFORME DE RENDIMIENTO - GESTORPRO"],
-          ["Fecha de generación:", todayString],
-          [],
-          ["MÉTRICAS GLOBALES", "VALOR"],
-          ["Total de Pedidos", stats.totalOrders],
-          ["Kilos Totales Procesados", Number(stats.totalKilos.toFixed(2))],
-          ["Importe Total Generado (€)", Number(stats.totalAmount.toFixed(2))]
-        ]);
-        wsStats['!cols'] = [{ wch: 35 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(wb, wsStats, "Resumen Global");
-        
-        // 2. Ventas Diarias
-        const wsDaily = XLSX.utils.json_to_sheet(
-          stats.dailyStats.map(s => ({
-            "Fecha": new Date(s.date).toLocaleDateString('es-ES'),
-            "Pedidos": s.count,
-            "Kilos": Number(s.kilos.toFixed(2)),
-            "Importe (€)": Number(s.amount.toFixed(2))
-          }))
-        );
-        wsDaily['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
-        XLSX.utils.book_append_sheet(wb, wsDaily, "Rendimiento Diario");
-
-        // 3. Mejores Clientes
-        const wsCustomers = XLSX.utils.json_to_sheet(
-          stats.topCustomers.map((c, i) => ({
-            "Ranking": i + 1,
-            "Cliente": c.name,
-            "Kilos Totales": Number(c.kilos.toFixed(2)),
-            "Importe Total (€)": Number(c.amount.toFixed(2))
-          }))
-        );
-        wsCustomers['!cols'] = [{ wch: 10 }, { wch: 35 }, { wch: 20 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(wb, wsCustomers, "Mejores Clientes");
-        
-        // 4. Productos Más Vendidos
-        const wsProducts = XLSX.utils.json_to_sheet(
-          stats.topProducts.map((p, i) => ({
-            "Ranking": i + 1,
-            "Producto": p.name,
-            "Kilos Totales": Number(p.kilos.toFixed(2))
-          }))
-        );
-        wsProducts['!cols'] = [{ wch: 10 }, { wch: 35 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(wb, wsProducts, "Top Productos");
-      }
-
-      // 5. Todos los pedidos detallados
+      // Detailed items list as requested by user image
       const wsDetails = XLSX.utils.json_to_sheet(allData);
       wsDetails['!cols'] = [
-        { wch: 20 }, // ID Pedido
         { wch: 35 }, // Cliente
-        { wch: 15 }, // Fecha
-        { wch: 15 }, // Lote
-        { wch: 25 }, // Producto
-        { wch: 10 }, // Tipo
-        { wch: 10 }, // Cant.
-        { wch: 10 }, // Kg/U
-        { wch: 10 }, // Tara
-        { wch: 15 }, // Kilos Netos
-        { wch: 15 }, // Precio
-        { wch: 15 }, // Total
+        { wch: 20 }, // Fecha Creación
         { wch: 15 }, // Estado
-        { wch: 40 }  // Notas
+        { wch: 40 }, // Notas
+        { wch: 15 }, // Total Kilos Pedido
+        { wch: 15 }, // Importe Total Pedido
+        { wch: 30 }, // Producto
+        { wch: 15 }, // Lote
+        { wch: 10 }, // Cantidad
+        { wch: 15 }, // Kg por Unidad
+        { wch: 10 }, // Tara
+        { wch: 15 }  // Precio
       ];
-      XLSX.utils.book_append_sheet(wb, wsDetails, "Detalle Operaciones");
+      XLSX.utils.book_append_sheet(wb, wsDetails, "Pedidos");
 
-      XLSX.writeFile(wb, `Informe_Direccion_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `Informe_Pedidos_${new Date().toISOString().split('T')[0]}.xlsx`);
     } catch (e: any) {
       alert("Error exportando: " + e.message);
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Cargando estadísticas...</div>;
+  if (loading && !stats) return <div className="p-8 text-center">Cargando estadísticas...</div>;
   if (errorMsg) return (
     <div className="p-8 text-center">
       <div className="text-red-500 font-bold mb-2">Error al cargar datos</div>
       <div className="text-slate-600 text-sm max-w-md mx-auto bg-red-50 p-4 rounded-lg border border-red-100">
         {errorMsg}
-        <br/><br/>
-        <strong>Nota:</strong> Si estás usando la versión gratuita de Supabase, es posible que tu proyecto se haya pausado por inactividad. Ve a <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="text-blue-600 underline">supabase.com</a> para reactivarlo.
       </div>
     </div>
   );
@@ -129,14 +75,17 @@ export function Dashboard({ onAction }: DashboardProps) {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-3xl font-bold text-slate-800">Panel de Control</h2>
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800">Panel de Control</h2>
+          <p className="text-slate-500">Resumen y análisis de operaciones</p>
+        </div>
         <div className="flex flex-wrap gap-3">
           <button 
             onClick={exportDashboard}
             className="flex items-center gap-2 bg-blue-50 text-blue-700 hover:bg-blue-100 px-4 py-2 rounded-xl font-medium transition-colors shadow-sm"
           >
             <Download size={18} />
-            <span className="hidden sm:inline">Exportar Informe</span>
+            <span className="hidden sm:inline">Exportar Excel</span>
             <span className="sm:hidden">Exportar</span>
           </button>
           <button 
@@ -157,7 +106,7 @@ export function Dashboard({ onAction }: DashboardProps) {
           </button>
         </div>
       </div>
-      
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">

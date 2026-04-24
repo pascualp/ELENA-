@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard } from 'lucide-react';
+import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard, Calendar } from 'lucide-react';
 import { Order } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
@@ -19,29 +19,33 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchOrders = async () => {
-    setLoading(true);
+    setIsRefreshing(true);
     setErrorMsg(null);
     try {
-      const data = await storage.getOrders();
+      const data = await storage.getOrders(startDate || undefined, endDate || undefined);
       setOrders(data);
     } catch (error: any) {
       console.error(error);
       setErrorMsg(error.message || 'Error al conectar con la base de datos');
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [startDate, endDate]);
 
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const data = await storage.getAllDataForExport();
+      const data = await storage.getAllDataForExport(startDate || undefined, endDate || undefined);
 
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -97,42 +101,80 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="text-2xl font-bold text-slate-800">Historial de Pedidos</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">Historial de Pedidos</h2>
+          <p className="text-sm text-slate-500">Administre y visualice todos los pedidos</p>
+        </div>
         
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button
             onClick={onViewDashboard}
-            className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             <LayoutDashboard size={18} />
-            <span className="hidden md:inline">Panel de Control</span>
+            <span className="md:inline">Panel</span>
           </button>
           <button
             onClick={onNewOrder}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
           >
             <Plus size={18} />
-            <span className="hidden md:inline">Nuevo Pedido</span>
+            <span className="md:inline">Nuevo</span>
           </button>
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
           >
             {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-            <span className="hidden md:inline">Exportar Excel</span>
+            <span className="md:inline">Excel</span>
           </button>
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar cliente o ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+        </div>
+      </div>
+
+      {/* Toolbar with Filters */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-4">
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input
+            type="text"
+            placeholder="Buscar por cliente..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-2">
+            <Calendar size={18} className="text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Desde:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="text-sm border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">Hasta:</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="text-sm border border-slate-200 rounded-lg px-2 py-2 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button 
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+            >
+              Ver todos
+            </button>
+          )}
         </div>
+        {isRefreshing && <Loader2 size={16} className="animate-spin text-slate-400 ml-auto" />}
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">

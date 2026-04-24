@@ -3,11 +3,22 @@ import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, 
 import { Order, OrderItem } from '../types';
 
 export const storage = {
-  getOrders: async (): Promise<Order[]> => {
+  getOrders: async (startDate?: string, endDate?: string): Promise<Order[]> => {
     try {
-      const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+      let q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+
+      if (startDate || endDate) {
+        orders = orders.filter(o => {
+          if (!o.created_at) return false;
+          const orderDate = o.created_at.split('T')[0];
+          if (startDate && orderDate < startDate) return false;
+          if (endDate && orderDate > endDate) return false;
+          return true;
+        });
+      }
+      return orders;
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, 'orders');
       return [];
@@ -217,30 +228,61 @@ export const storage = {
     await batch.commit();
   },
 
-  getStats: async () => {
-    const ordersSnap = await getDocs(collection(db, 'orders'));
-    const orders = ordersSnap.docs.map(doc => doc.data() as Order);
+  getStats: async (startDate?: string, endDate?: string) => {
+    let q = query(collection(db, 'orders'));
+    const ordersSnap = await getDocs(q);
+    let orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    
+    // Filter by date if provided
+    if (startDate || endDate) {
+      orders = orders.filter(o => {
+        if (!o.created_at) return false;
+        const orderDate = o.created_at.split('T')[0];
+        if (startDate && orderDate < startDate) return false;
+        if (endDate && orderDate > endDate) return false;
+        return true;
+      });
+    }
     
     const totalOrders = orders.length;
     const totalKilos = orders.reduce((acc, o) => acc + (o.total_kilos || 0), 0);
     const totalAmount = orders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
 
-    // Daily stats (last 7 days)
-    const dailyStats = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      
-      const ordersThatDay = orders.filter(o => o.created_at && o.created_at.startsWith(dateStr));
-      
-      dailyStats.push({
-        date: dateStr,
+    // Daily stats logic
+    const dailyStatsMap: Record<string, {count: number, kilos: number, amount: number}> = {};
+    
+    // Determine range for daily stats
+    let dailyRange = [];
+    if (startDate && endDate) {
+      let current = new Date(startDate);
+      const last = new Date(endDate);
+      while (current <= last) {
+        dailyRange.push(current.toISOString().split('T')[0]);
+        current.setDate(current.getDate() + 1);
+        if (dailyRange.length > 90) break; // Safety limit
+      }
+    } else {
+      // Default to last 7 days from now or from the last order
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dailyRange.push(d.toISOString().split('T')[0]);
+      }
+    }
+
+    dailyRange.forEach(date => {
+      const ordersThatDay = orders.filter(o => o.created_at && o.created_at.startsWith(date));
+      dailyStatsMap[date] = {
         count: ordersThatDay.length,
         kilos: ordersThatDay.reduce((acc, o) => acc + (o.total_kilos || 0), 0),
         amount: ordersThatDay.reduce((acc, o) => acc + (o.total_amount || 0), 0)
-      });
-    }
+      };
+    });
+
+    const dailyStats = Object.entries(dailyStatsMap).map(([date, data]) => ({
+      date,
+      ...data
+    })).sort((a, b) => a.date.localeCompare(b.date));
 
     // Top Customers
     const customerMap: Record<string, {kilos: number, amount: number}> = {};
@@ -260,8 +302,8 @@ export const storage = {
 
     // Top Products
     const productMap: Record<string, number> = {};
-    for (const orderDoc of ordersSnap.docs) {
-      const itemsSnap = await getDocs(collection(db, 'orders', orderDoc.id, 'items'));
+    for (const order of orders) {
+      const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
       itemsSnap.docs.forEach(itemDoc => {
         const item = itemDoc.data() as OrderItem;
         if (item.product_name) {
@@ -290,20 +332,29 @@ export const storage = {
     return Array.from(customers);
   },
 
-  getAllDataForExport: async () => {
-    const q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
+  getAllDataForExport: async (startDate?: string, endDate?: string) => {
+    let q = query(collection(db, 'orders'), orderBy('created_at', 'desc'));
     const ordersSnap = await getDocs(q);
+    let orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+
+    if (startDate || endDate) {
+      orders = orders.filter(o => {
+        if (!o.created_at) return false;
+        const orderDate = o.created_at.split('T')[0];
+        if (startDate && orderDate < startDate) return false;
+        if (endDate && orderDate > endDate) return false;
+        return true;
+      });
+    }
     
     const exportData: any[] = [];
     
-    for (const orderDoc of ordersSnap.docs) {
-      const order = { id: orderDoc.id, ...orderDoc.data() } as Order;
+    for (const order of orders) {
       const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
       const items = itemsSnap.docs.map(doc => doc.data() as OrderItem);
       
       if (items.length === 0) {
         exportData.push({
-          "ID Pedido": order.id,
           "Cliente": order.customer_name,
           "Fecha Creación": new Date(order.created_at).toLocaleString('es-ES'),
           "Estado": order.status,
@@ -312,18 +363,14 @@ export const storage = {
           "Importe Total Pedido": order.total_amount || 0,
           "Producto": "",
           "Lote": "",
-          "Es Caja": "",
           "Cantidad": "",
           "Kg por Unidad": "",
           "Tara": "",
-          "Precio": "",
-          "Total Kilos Item": "",
-          "Total Importe Item": ""
+          "Precio": ""
         });
       } else {
         items.forEach(item => {
           exportData.push({
-            "ID Pedido": order.id,
             "Cliente": order.customer_name,
             "Fecha Creación": new Date(order.created_at).toLocaleString('es-ES'),
             "Estado": order.status,
@@ -332,13 +379,10 @@ export const storage = {
             "Importe Total Pedido": order.total_amount || 0,
             "Producto": item.product_name,
             "Lote": item.lot_number,
-            "Es Caja": item.is_box ? "Sí" : "No",
             "Cantidad": item.quantity,
             "Kg por Unidad": item.kilos_per_unit,
             "Tara": (Number(item.tare) || 0) * (Number(item.quantity) || 1),
-            "Precio": item.price || 0,
-            "Total Kilos Item": item.total_item_kilos,
-            "Total Importe Item": item.total_price || 0
+            "Precio": item.price || 0
           });
         });
       }
