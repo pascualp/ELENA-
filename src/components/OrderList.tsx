@@ -94,8 +94,8 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
         if (exportConfig['Fecha']) row['Fecha'] = new Date(order.created_at).toLocaleDateString('es-ES');
         if (exportConfig['Hora']) row['Hora'] = new Date(order.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         if (exportConfig['Estado']) row['Estado'] = order.status === 'completed' ? 'Completado' : 'Pendiente';
-        if (exportConfig['Total Kilos']) row['Total Kilos'] = Number(order.total_kilos.toFixed(2));
-        if (exportConfig['Importe (€)']) row['Importe (€)'] = order.status === 'pending' ? 0 : Number((order.total_amount || 0).toFixed(2));
+        if (exportConfig['Total Kilos']) row['Total Kilos'] = Number(order.total_kilos.toFixed(2)) + ' kg';
+        if (exportConfig['Importe (€)']) row['Importe (€)'] = (order.status === 'pending' ? 0 : (order.total_amount || 0)).toFixed(2) + ' €';
         if (exportConfig['Notas']) row['Notas'] = order.notes || '';
         return row;
       });
@@ -111,8 +111,8 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             totalRow[col] = "TOTAL";
             firstColSet = true;
           } else {
-            if (col === 'Total Kilos') totalRow[col] = Number(totalFilteredKilos.toFixed(2));
-            else if (col === 'Importe (€)') totalRow[col] = Number(totalFilteredAmount.toFixed(2));
+            if (col === 'Total Kilos') totalRow[col] = totalFilteredKilos.toFixed(2) + ' kg';
+            else if (col === 'Importe (€)') totalRow[col] = totalFilteredAmount.toFixed(2) + ' €';
             else totalRow[col] = "";
           }
         }
