@@ -246,7 +246,7 @@ export const storage = {
     
     const totalOrders = orders.length;
     const totalKilos = orders.reduce((acc, o) => acc + (o.total_kilos || 0), 0);
-    const totalAmount = orders.reduce((acc, o) => acc + (o.total_amount || 0), 0);
+    const totalAmount = orders.reduce((acc, o) => acc + (o.status === 'pending' ? 0 : (o.total_amount || 0)), 0);
 
     // Daily stats logic
     const dailyStatsMap: Record<string, {count: number, kilos: number, amount: number}> = {};
@@ -275,7 +275,7 @@ export const storage = {
       dailyStatsMap[date] = {
         count: ordersThatDay.length,
         kilos: ordersThatDay.reduce((acc, o) => acc + (o.total_kilos || 0), 0),
-        amount: ordersThatDay.reduce((acc, o) => acc + (o.total_amount || 0), 0)
+        amount: ordersThatDay.reduce((acc, o) => acc + (o.status === 'pending' ? 0 : (o.total_amount || 0)), 0)
       };
     });
 
@@ -292,7 +292,7 @@ export const storage = {
           customerMap[o.customer_name] = { kilos: 0, amount: 0 };
         }
         customerMap[o.customer_name].kilos += (o.total_kilos || 0);
-        customerMap[o.customer_name].amount += (o.total_amount || 0);
+        customerMap[o.customer_name].amount += (o.status === 'pending' ? 0 : (o.total_amount || 0));
       }
     });
     const topCustomers = Object.entries(customerMap)
