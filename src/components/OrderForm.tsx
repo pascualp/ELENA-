@@ -142,7 +142,8 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       const qty = Number(item.quantity) || 1;
       const kpu = Number(item.kilos_per_unit) || 0;
       const tare = Number(item.tare) || 0;
-      const netKilos = Math.max(0, kpu - (qty * tare));
+      const netKilosNominal = kpu - (qty * tare);
+      const netKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
       return acc + netKilos;
     }, 0);
   };
@@ -154,8 +155,9 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
       const tare = Number(item.tare) || 0;
       const price = Number(item.price) || 0;
       
-      if (kpu > 0) {
-        const netKilos = Math.max(0, kpu - (qty * tare));
+      if (kpu !== 0) {
+        const netKilosNominal = kpu - (qty * tare);
+        const netKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
         return acc + (netKilos * price);
       } else {
         return acc + (qty * price);
@@ -384,8 +386,9 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                       const kpu = Number(item.kilos_per_unit) || 0;
                       const tare = Number(item.tare) || 0;
                       const price = Number(item.price) || 0;
-                      const netKilos = Math.max(0, kpu - (qty * tare));
-                      const subtotal = kpu > 0 ? netKilos * price : qty * price;
+                      const netKilosNominal = kpu - (qty * tare);
+                      const netKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
+                      const subtotal = kpu !== 0 ? netKilos * price : qty * price;
 
                       return (
                         <tr key={index} className="hover:bg-slate-50/50 transition-colors group">
@@ -395,7 +398,7 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                           <td className="px-4 py-4 text-base text-right text-slate-700">{kpu > 0 ? kpu.toFixed(2) : '-'}</td>
                           <td className="px-4 py-4 text-base text-right text-red-400 font-medium">-{ (qty * tare).toFixed(2) }</td>
                           <td className="px-4 py-4 text-base text-right font-mono font-bold text-slate-900">
-                            {kpu > 0 ? `${netKilos.toFixed(2)}kg` : '-'}
+                            {kpu !== 0 ? `${netKilos.toFixed(2)}kg` : '-'}
                           </td>
                           <td className="px-4 py-4 text-base text-right text-slate-700 font-medium">{price.toFixed(2)}€</td>
                           <td className="px-4 py-4 text-lg text-right font-mono font-black text-emerald-600">{subtotal.toFixed(2)}€</td>
