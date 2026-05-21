@@ -21,7 +21,9 @@ const PRODUCT_CODES: Record<string, string> = {
   '3742': 'Piña madura',
   '9032': 'Pitahaya',
   '3280': 'Coco',
-  '3282': 'Coco de agua'
+  '3282': 'Coco de agua',
+  '1409': 'FRESAS',
+  '60': 'HIERBA BUENA'
 };
 
 export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistory, onViewDashboard }: OrderFormProps) {
