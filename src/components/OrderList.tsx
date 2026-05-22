@@ -384,10 +384,10 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                         <option value="completed" className="bg-white text-slate-800">Completado</option>
                       </select>
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-medium text-slate-700">
+                    <td className="px-6 py-4 text-right font-mono font-medium text-slate-500">
                       {order.total_kilos.toFixed(2)} kg
                     </td>
-                    <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">
+                    <td className="px-6 py-4 text-right font-mono font-bold text-slate-900">
                       {order.status === 'pending' ? (
                         <span className="text-slate-400 line-through">{(order.total_amount || 0).toFixed(2)} €</span>
                       ) : (
@@ -429,10 +429,10 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                   <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-700 uppercase text-sm">
                     {statusFilter === 'pending' ? 'Total (Excluyendo Pendientes)' : 'Total Filtrado'}:
                   </td>
-                  <td className="px-6 py-4 text-right font-mono font-bold text-slate-800">
+                  <td className="px-6 py-4 text-right font-mono font-bold text-slate-500">
                     {totalFilteredKilos.toFixed(2)} kg
                   </td>
-                  <td className="px-6 py-4 text-right font-mono font-bold text-emerald-700 text-lg">
+                  <td className="px-6 py-4 text-right font-mono font-black text-slate-900 text-lg">
                     {totalFilteredAmount.toFixed(2)} €
                   </td>
                   <td></td>

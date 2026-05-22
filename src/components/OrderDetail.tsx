@@ -204,11 +204,11 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
             <tfoot>
               <tr className="border-t-2 border-slate-100">
                 <td colSpan={6} className="py-4 text-right font-bold text-slate-800">Totales</td>
-                <td className="py-4 text-right font-mono font-bold text-lg text-slate-900">
+                <td className="py-4 text-right font-mono font-bold text-lg text-slate-500">
                   {order.total_kilos.toFixed(2)} kg
                 </td>
                 <td></td>
-                <td className="py-4 text-right font-mono font-bold text-xl text-emerald-600">
+                <td className="py-4 text-right font-mono font-black text-xl text-slate-900">
                   {(order.total_amount || 0).toFixed(2)} €
                 </td>
               </tr>
