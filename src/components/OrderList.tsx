@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard, Calendar, Settings, X } from 'lucide-react';
-import { Order } from '../types';
+import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard, Calendar, Settings, X, ClipboardList, Copy, Check, RefreshCw } from 'lucide-react';
+import { Order, OrderItem } from '../types';
 import { cn } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { storage } from '../lib/storage';
+import { db } from '../lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 interface OrderListProps {
   onSelectOrder: (order: Order) => void;
@@ -37,6 +39,154 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showExportSettings, setShowExportSettings] = useState(false);
   const [exportConfig, setExportConfig] = useState<Record<ExportColumn, boolean>>(defaultExportConfig);
+  const [showLotReport, setShowLotReport] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportItems, setReportItems] = useState<any[]>([]);
+  const [reportSearchTerm, setReportSearchTerm] = useState('');
+  const [copiedReport, setCopiedReport] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState<string>('');
+  const [reportEndDate, setReportEndDate] = useState<string>('');
+
+  const loadReportForDates = async (start: string, end: string) => {
+    setLoadingReport(true);
+    setReportError(null);
+    try {
+      const fetchedGroups: Record<string, {
+        product_name: string;
+        lot_number: string;
+        total_kilos: number;
+        total_quantity: number;
+        is_box: boolean;
+        product_names_set?: Set<string>;
+      }> = {};
+
+      // Load all orders for the selected date range
+      const reportOrders = await storage.getOrders(start || undefined, end || undefined);
+
+      await Promise.all(reportOrders.map(async (order) => {
+        const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
+        itemsSnap.docs.forEach(docSnap => {
+          const item = docSnap.data() as OrderItem;
+          const productName = item.product_name || 'Desconocido';
+          const lotNumber = item.lot_number || 'Sin Lote';
+          const kilos = Number(item.total_item_kilos) || 0;
+          const qty = Number(item.quantity) || 0;
+
+          // Group by lot number if available. For empty/Sin Lote items, group by product name so that unrelated items aren't merged.
+          const cleanLot = lotNumber.trim();
+          const isNoLot = !cleanLot || cleanLot.toLowerCase() === 'sin lote' || cleanLot.toLowerCase() === 'sin_lote' || cleanLot === '';
+          const key = isNoLot ? `nolot_${productName}` : cleanLot;
+
+          if (!fetchedGroups[key]) {
+            fetchedGroups[key] = {
+              product_name: productName,
+              lot_number: isNoLot ? 'Sin Lote' : cleanLot,
+              total_kilos: 0,
+              total_quantity: 0,
+              is_box: Boolean(item.is_box),
+              product_names_set: new Set([productName])
+            };
+          } else {
+            fetchedGroups[key].product_names_set?.add(productName);
+          }
+
+          fetchedGroups[key].total_kilos += kilos;
+          fetchedGroups[key].total_quantity += qty;
+        });
+      }));
+
+      // Join the unique product names for items with the same lot
+      const finalItems = Object.values(fetchedGroups).map(group => {
+        if (group.product_names_set && group.product_names_set.size > 0) {
+          group.product_name = Array.from(group.product_names_set).join(' / ');
+        }
+        // Remove the set before putting it in state to keep it clean
+        delete group.product_names_set;
+        return group;
+      });
+
+      setReportItems(finalItems);
+    } catch (err: any) {
+      console.error("Error generating lot report:", err);
+      setReportError(err.message || 'Error al compilar el informe de lotes');
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
+  const handleOpenLotReport = async () => {
+    setShowLotReport(true);
+    setReportSearchTerm('');
+    // Default inside-report dates to the outer screen filters (or current local date if empty)
+    const initialStart = startDate || new Date().toISOString().split('T')[0];
+    const initialEnd = endDate || new Date().toISOString().split('T')[0];
+    setReportStartDate(initialStart);
+    setReportEndDate(initialEnd);
+    loadReportForDates(initialStart, initialEnd);
+  };
+
+  const handleExportLotReportExcel = (itemsToExport: any[]) => {
+    try {
+      const data = itemsToExport.map(item => ({
+        "Producto": item.product_name,
+        "Lote": item.lot_number,
+        "Cantidad": item.total_quantity,
+        "Kilos Totales": Number(item.total_kilos.toFixed(2))
+      }));
+
+      const totalQty = itemsToExport.reduce((sum, item) => sum + item.total_quantity, 0);
+      const totalKilos = itemsToExport.reduce((sum, item) => sum + item.total_kilos, 0);
+
+      data.push({
+        "Producto": "TOTAL CONSOLIDADO",
+        "Lote": "",
+        "Cantidad": totalQty,
+        "Kilos Totales": Number(totalKilos.toFixed(2))
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      
+      worksheet['!cols'] = [
+        { wch: 35 }, // Producto
+        { wch: 15 }, // Lote
+        { wch: 12 }, // Cantidad
+        { wch: 15 }  // Kilos Totales
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Resumen por Lote");
+      XLSX.writeFile(workbook, `Consolidado_Lotes_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error("Error exporting lot report to excel:", error);
+      alert("Error al exportar informe de lotes");
+    }
+  };
+
+  const handleCopyLotReportToClipboard = (itemsToCopy: any[]) => {
+    try {
+      let text = "Producto\tLote\tCantidad\tKilos Totales (kg)\n";
+      itemsToCopy.forEach(item => {
+        text += `${item.product_name}\t${item.lot_number}\t${item.total_quantity}\t${item.total_kilos.toFixed(2)}\n`;
+      });
+
+      const totalQty = itemsToCopy.reduce((sum, item) => sum + item.total_quantity, 0);
+      const totalKilos = itemsToCopy.reduce((sum, item) => sum + item.total_kilos, 0);
+      text += `TOTAL\t\t${totalQty}\t${totalKilos.toFixed(2)}\n`;
+
+      navigator.clipboard.writeText(text);
+      setCopiedReport(true);
+      setTimeout(() => setCopiedReport(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy report to clipboard:", err);
+      alert("No se pudo copiar al portapapeles");
+    }
+  };
+
+  const filteredReportItems = reportItems.filter(item => {
+    return item.product_name.toLowerCase().includes(reportSearchTerm.toLowerCase()) ||
+           item.lot_number.toLowerCase().includes(reportSearchTerm.toLowerCase());
+  }).sort((a, b) => a.product_name.localeCompare(b.product_name));
 
   useEffect(() => {
     const savedConfig = localStorage.getItem('gestorpro_export_config');
@@ -211,10 +361,18 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
           </button>
           <button
             onClick={onNewOrder}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm font-medium text-sm"
           >
             <Plus size={18} />
             <span className="md:inline">Nuevo</span>
+          </button>
+          <button
+            onClick={handleOpenLotReport}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium text-sm"
+            title="Consolidar artículos por lotes para facturación"
+          >
+            <ClipboardList size={18} />
+            <span>Informe Lotes</span>
           </button>
           <div className="flex w-full md:w-auto">
             <button
@@ -266,6 +424,171 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
               <button
                 onClick={() => setShowExportSettings(false)}
                 className="px-6 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLotReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">Informe de Consolidación por Lote</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Sumatorio agrupado por Producto, Lote y Precio para el período de fechas seleccionado
+                </p>
+              </div>
+              <button onClick={() => setShowLotReport(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {/* Selector de Rango de Fechas */}
+              <div className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Calendar size={16} className="text-indigo-600 shrink-0" />
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Desde:</span>
+                    <input
+                      type="date"
+                      value={reportStartDate}
+                      onChange={(e) => setReportStartDate(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white font-medium text-slate-700 w-full sm:w-auto shadow-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Hasta:</span>
+                    <input
+                      type="date"
+                      value={reportEndDate}
+                      onChange={(e) => setReportEndDate(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none bg-white font-medium text-slate-700 w-full sm:w-auto shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => loadReportForDates(reportStartDate, reportEndDate)}
+                  disabled={loadingReport}
+                  className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold text-sm px-5 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
+                >
+                  <RefreshCw size={15} className={cn(loadingReport && "animate-spin")} />
+                  <span>Calcular Lotes</span>
+                </button>
+              </div>
+
+              {loadingReport ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <Loader2 className="animate-spin text-indigo-600 animate-duration-1000" size={36} />
+                  <p className="text-slate-600 text-sm font-medium">Buscando artículos y agrupando lotes...</p>
+                </div>
+              ) : reportError ? (
+                <div className="bg-red-50 p-4 rounded-xl border border-red-100 text-rose-700 text-sm">
+                  {reportError}
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 items-center">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Buscar por producto o lote..."
+                        value={reportSearchTerm}
+                        onChange={(e) => setReportSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        onClick={() => handleCopyLotReportToClipboard(filteredReportItems)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium border border-slate-200 shadow-sm"
+                      >
+                        {copiedReport ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                        <span>{copiedReport ? '¡Copiado!' : 'Copiar Portapapeles'}</span>
+                      </button>
+                      <button
+                        onClick={() => handleExportLotReportExcel(filteredReportItems)}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                      >
+                        <Download size={16} />
+                        <span>Exportar Excel</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-150 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                          <tr>
+                            <th className="px-5 py-3">Producto</th>
+                            <th className="px-5 py-3">Lote</th>
+                            <th className="px-5 py-3 text-right">Cantidad</th>
+                            <th className="px-5 py-3 text-right">Kilos Totales</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredReportItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-5 py-10 text-center text-slate-500">
+                                No se encontraron artículos que cumplan los criterios.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredReportItems.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-3.5 font-semibold text-slate-900">{item.product_name}</td>
+                                <td className="px-5 py-3.5">
+                                  <span className="px-2.5 py-0.5 text-xs font-semibold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    {item.lot_number || 'Sin lote'}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3.5 text-right text-slate-700">
+                                  {item.total_quantity} {item.is_box ? 'cajas' : 'unid.'}
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-400">
+                                  {item.total_kilos.toFixed(2)} kg
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                        {filteredReportItems.length > 0 && (
+                          <tfoot className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-700">
+                            <tr className="bg-indigo-50/20 text-slate-800">
+                              <td colSpan={2} className="px-5 py-4 text-right font-bold text-indigo-900">
+                                TOTAL CONSOLIDADO:
+                              </td>
+                              <td className="px-5 py-4 text-right">
+                                {filteredReportItems.reduce((sum, item) => sum + item.total_quantity, 0)}
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-slate-400 text-base">
+                                {filteredReportItems.reduce((sum, item) => sum + item.total_kilos, 0).toFixed(2)} kg
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 text-right italic">
+                    * Sugerencia: Utilice la opción de "Copiar Portapapeles" para pegar el listado tabulado directamente en Microsoft Excel, Google Sheets, o su software de facturación.
+                  </p>
+                </>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setShowLotReport(false)}
+                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors text-sm"
               >
                 Cerrar
               </button>
