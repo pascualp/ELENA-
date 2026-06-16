@@ -56,8 +56,9 @@ export const storage = {
         let itemKilos = 0;
         let itemTotal = 0;
         
-        if (kpu > 0) {
-          itemKilos = Math.max(0, kpu - (qty * tare));
+        if (kpu !== 0) {
+          const netKilosNominal = kpu - (qty * tare);
+          itemKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
           itemTotal = itemKilos * price;
         } else {
           itemTotal = qty * price;
@@ -91,8 +92,9 @@ export const storage = {
         let itemKilos = 0;
         let itemTotal = 0;
         
-        if (kpu > 0) {
-          itemKilos = Math.max(0, kpu - (qty * tare));
+        if (kpu !== 0) {
+          const netKilosNominal = kpu - (qty * tare);
+          itemKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
           itemTotal = itemKilos * price;
         } else {
           itemTotal = qty * price;
@@ -135,8 +137,9 @@ export const storage = {
         let itemKilos = 0;
         let itemTotal = 0;
         
-        if (kpu > 0) {
-          itemKilos = Math.max(0, kpu - (qty * tare));
+        if (kpu !== 0) {
+          const netKilosNominal = kpu - (qty * tare);
+          itemKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
           itemTotal = itemKilos * price;
         } else {
           itemTotal = qty * price;
@@ -176,8 +179,9 @@ export const storage = {
         let itemKilos = 0;
         let itemTotal = 0;
         
-        if (kpu > 0) {
-          itemKilos = Math.max(0, kpu - (qty * tare));
+        if (kpu !== 0) {
+          const netKilosNominal = kpu - (qty * tare);
+          itemKilos = kpu < 0 ? netKilosNominal : Math.max(0, netKilosNominal);
           itemTotal = itemKilos * price;
         } else {
           itemTotal = qty * price;

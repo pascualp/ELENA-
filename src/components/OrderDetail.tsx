@@ -188,18 +188,28 @@ export function OrderDetail({ orderId, onBack, onEdit, onViewDashboard }: OrderD
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {order.items?.map((item, index) => (
-                <tr key={index}>
-                  <td className="py-4 text-slate-800">{item.product_name}</td>
-                  <td className="py-4 text-slate-600 text-sm">{item.lot_number || '-'}</td>
-                  <td className="py-4 text-right text-slate-600">{item.quantity}</td>
-                  <td className="py-4 text-right text-slate-600">{item.kilos_per_unit.toFixed(2)}</td>
-                  <td className="py-4 text-right text-slate-400 text-xs">-{((Number(item.tare) || 0) * (Number(item.quantity) || 1)).toFixed(2)}</td>
-                  <td className="py-4 text-right font-mono text-slate-900">{item.total_item_kilos?.toFixed(2)}</td>
-                  <td className="py-4 text-right text-slate-600">{item.price?.toFixed(2)}€</td>
-                  <td className="py-4 text-right font-mono font-medium text-emerald-600">{item.total_price?.toFixed(2)}€</td>
-                </tr>
-              ))}
+              {order.items?.map((item, index) => {
+                const qty = Number(item.quantity) || 1;
+                const kpu = Number(item.kilos_per_unit) || 0;
+                const tare = Number(item.tare) || 0;
+                const price = Number(item.price) || 0;
+                const itemTare = qty * tare;
+
+                return (
+                  <tr key={index}>
+                    <td className="py-4 text-slate-800">{item.product_name}</td>
+                    <td className="py-4 text-slate-600 text-sm">{item.lot_number || '-'}</td>
+                    <td className="py-4 text-right text-slate-600">{qty}</td>
+                    <td className="py-4 text-right text-slate-600">{kpu !== 0 ? kpu.toFixed(2) : '-'}</td>
+                    <td className="py-4 text-right text-slate-400 text-xs">
+                      {itemTare < 0 ? itemTare.toFixed(2) : `-${itemTare.toFixed(2)}`}
+                    </td>
+                    <td className="py-4 text-right font-mono text-slate-900">{kpu !== 0 ? item.total_item_kilos?.toFixed(2) : '-'}</td>
+                    <td className="py-4 text-right text-slate-600">{price.toFixed(2)}€</td>
+                    <td className="py-4 text-right font-mono font-medium text-emerald-600">{item.total_price?.toFixed(2)}€</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-100">

@@ -397,8 +397,10 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
                           <td className="px-4 py-4 text-base text-slate-500 font-mono">{item.lot_number || '-'}</td>
                           <td className="px-4 py-4 text-base font-bold text-slate-800">{item.product_name}</td>
                           <td className="px-4 py-4 text-base text-right text-slate-700 font-medium">{qty}</td>
-                          <td className="px-4 py-4 text-base text-right text-slate-700">{kpu > 0 ? kpu.toFixed(2) : '-'}</td>
-                          <td className="px-4 py-4 text-base text-right text-red-400 font-medium">-{ (qty * tare).toFixed(2) }</td>
+                          <td className="px-4 py-4 text-base text-right text-slate-700">{kpu !== 0 ? kpu.toFixed(2) : '-'}</td>
+                          <td className="px-4 py-4 text-base text-right text-red-400 font-medium">
+                            {(qty * tare) < 0 ? (qty * tare).toFixed(2) : `-${(qty * tare).toFixed(2)}`}
+                          </td>
                           <td className="px-4 py-4 text-base text-right font-mono font-bold text-slate-400">
                             {kpu !== 0 ? <>{netKilos.toFixed(2)} <span className="font-medium text-sm">kg</span></> : '-'}
                           </td>
