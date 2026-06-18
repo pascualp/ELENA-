@@ -72,6 +72,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             order_date: order.created_at,
             customer_name: order.customer_name,
             product_name: item.product_name || 'Desconocido',
+            lot_number: item.lot_number || '',
             quantity: Number(item.quantity) || 0,
             kilos: Number(item.total_item_kilos) || 0,
             is_box: Boolean(item.is_box)
@@ -744,6 +745,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                             <th className="px-5 py-3">Albarán ID</th>
                             <th className="px-5 py-3">Cliente</th>
                             <th className="px-5 py-3">Artículo</th>
+                            <th className="px-5 py-3">Lote</th>
                             <th className="px-5 py-3 text-right">Bultos</th>
                             <th className="px-5 py-3 text-right">Kilos Netos</th>
                           </tr>
@@ -751,7 +753,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                         <tbody className="divide-y divide-slate-100">
                           {filteredArticleReportItems.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                              <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
                                 {articleReportSearchTerm ? 'No se encontraron artículos que cumplan los criterios.' : 'Escriba el nombre de un artículo en el buscador para ver sus resultados.'}
                               </td>
                             </tr>
@@ -762,6 +764,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                                 <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{item.order_id.slice(0, 8)}</td>
                                 <td className="px-5 py-3.5 text-slate-800">{item.customer_name}</td>
                                 <td className="px-5 py-3.5 font-semibold text-blue-900">{item.product_name}</td>
+                                <td className="px-5 py-3.5 text-slate-600 text-sm font-mono">{item.lot_number || '-'}</td>
                                 <td className="px-5 py-3.5 text-right text-slate-700">
                                   {item.quantity} {item.is_box ? 'cajas' : 'unid.'}
                                 </td>
@@ -775,7 +778,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                         {filteredArticleReportItems.length > 0 && (
                           <tfoot className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-700">
                             <tr className="bg-blue-50/20 text-slate-800">
-                              <td colSpan={4} className="px-5 py-4 text-right font-bold text-blue-900">
+                              <td colSpan={5} className="px-5 py-4 text-right font-bold text-blue-900">
                                 TOTALES ({articleReportSearchTerm}):
                               </td>
                               <td className="px-5 py-4 text-right text-blue-700">
