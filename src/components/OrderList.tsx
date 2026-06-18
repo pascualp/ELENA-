@@ -48,6 +48,63 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
   const [reportStartDate, setReportStartDate] = useState<string>('');
   const [reportEndDate, setReportEndDate] = useState<string>('');
 
+  const [showArticleReport, setShowArticleReport] = useState(false);
+  const [loadingArticleReport, setLoadingArticleReport] = useState(false);
+  const [articleReportError, setArticleReportError] = useState<string | null>(null);
+  const [articleReportItems, setArticleReportItems] = useState<any[]>([]);
+  const [articleReportSearchTerm, setArticleReportSearchTerm] = useState('');
+  const [articleReportStartDate, setArticleReportStartDate] = useState<string>('');
+  const [articleReportEndDate, setArticleReportEndDate] = useState<string>('');
+
+  const loadArticleReportForDates = async (start: string, end: string) => {
+    setLoadingArticleReport(true);
+    setArticleReportError(null);
+    try {
+      const fetchedItems: any[] = [];
+      const reportOrders = await storage.getOrders(start || undefined, end || undefined);
+
+      await Promise.all(reportOrders.map(async (order) => {
+        const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
+        itemsSnap.docs.forEach(docSnap => {
+          const item = docSnap.data() as OrderItem;
+          fetchedItems.push({
+            order_id: order.id,
+            order_date: order.created_at,
+            customer_name: order.customer_name,
+            product_name: item.product_name || 'Desconocido',
+            quantity: Number(item.quantity) || 0,
+            kilos: Number(item.total_item_kilos) || 0,
+            is_box: Boolean(item.is_box)
+          });
+        });
+      }));
+
+      // Sort by order date desc
+      fetchedItems.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
+      setArticleReportItems(fetchedItems);
+    } catch (err: any) {
+      console.error("Error generating article report:", err);
+      setArticleReportError(err.message || 'Error al compilar el informe de artículos');
+    } finally {
+      setLoadingArticleReport(false);
+    }
+  };
+
+  const handleOpenArticleReport = async () => {
+    setShowArticleReport(true);
+    setArticleReportSearchTerm('');
+    const initialStart = startDate || new Date().toISOString().split('T')[0];
+    const initialEnd = endDate || new Date().toISOString().split('T')[0];
+    setArticleReportStartDate(initialStart);
+    setArticleReportEndDate(initialEnd);
+    loadArticleReportForDates(initialStart, initialEnd);
+  };
+
+  const filteredArticleReportItems = articleReportItems.filter(item => {
+    if (!articleReportSearchTerm) return false; // Por defecto no mostrar nada si no hay filtro
+    return item.product_name.toLowerCase().includes(articleReportSearchTerm.toLowerCase());
+  });
+
   const loadReportForDates = async (start: string, end: string) => {
     setLoadingReport(true);
     setReportError(null);
@@ -374,6 +431,14 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             <ClipboardList size={18} />
             <span>Informe Lotes</span>
           </button>
+          <button
+            onClick={handleOpenArticleReport}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
+            title="Ver kilos y bultos de un artículo por albarán"
+          >
+            <ClipboardList size={18} />
+            <span>Informe Artículos</span>
+          </button>
           <div className="flex w-full md:w-auto">
             <button
               onClick={handleExport}
@@ -588,6 +653,150 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button
                 onClick={() => setShowLotReport(false)}
+                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showArticleReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">Informe de Artículos por Albarán</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Cantidades y Kilos de un artículo específico, separados por albarán (pedido)
+                </p>
+              </div>
+              <button onClick={() => setShowArticleReport(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Calendar size={16} className="text-blue-600 shrink-0" />
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Desde:</span>
+                    <input
+                      type="date"
+                      value={articleReportStartDate}
+                      onChange={(e) => setArticleReportStartDate(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white font-medium text-slate-700 w-full sm:w-auto shadow-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Hasta:</span>
+                    <input
+                      type="date"
+                      value={articleReportEndDate}
+                      onChange={(e) => setArticleReportEndDate(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white font-medium text-slate-700 w-full sm:w-auto shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => loadArticleReportForDates(articleReportStartDate, articleReportEndDate)}
+                  disabled={loadingArticleReport}
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-sm px-5 py-2 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
+                >
+                  <RefreshCw size={15} className={cn(loadingArticleReport && "animate-spin")} />
+                  <span>Obtener Datos</span>
+                </button>
+              </div>
+
+              {loadingArticleReport ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <Loader2 className="animate-spin text-blue-600 animate-duration-1000" size={36} />
+                  <p className="text-slate-600 text-sm font-medium">Cargando albaranes detallados...</p>
+                </div>
+              ) : articleReportError ? (
+                <div className="bg-red-50 p-4 rounded-xl border border-red-100 text-rose-700 text-sm">
+                  {articleReportError}
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col sm:flex-row justify-between gap-3 items-center">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Buscar por artículo EXACTO (ej. Coco)..."
+                        value={articleReportSearchTerm}
+                        onChange={(e) => setArticleReportSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-150 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                          <tr>
+                            <th className="px-5 py-3">Fecha</th>
+                            <th className="px-5 py-3">Albarán ID</th>
+                            <th className="px-5 py-3">Cliente</th>
+                            <th className="px-5 py-3">Artículo</th>
+                            <th className="px-5 py-3 text-right">Bultos</th>
+                            <th className="px-5 py-3 text-right">Kilos Netos</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredArticleReportItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                                {articleReportSearchTerm ? 'No se encontraron artículos que cumplan los criterios.' : 'Escriba el nombre de un artículo en el buscador para ver sus resultados.'}
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredArticleReportItems.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-3.5 text-slate-600">{new Date(item.order_date).toLocaleDateString('es-ES')}</td>
+                                <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{item.order_id.slice(0, 8)}</td>
+                                <td className="px-5 py-3.5 text-slate-800">{item.customer_name}</td>
+                                <td className="px-5 py-3.5 font-semibold text-blue-900">{item.product_name}</td>
+                                <td className="px-5 py-3.5 text-right text-slate-700">
+                                  {item.quantity} {item.is_box ? 'cajas' : 'unid.'}
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-600">
+                                  {item.kilos.toFixed(2)} kg
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                        {filteredArticleReportItems.length > 0 && (
+                          <tfoot className="bg-slate-50 border-t border-slate-200 font-semibold text-slate-700">
+                            <tr className="bg-blue-50/20 text-slate-800">
+                              <td colSpan={4} className="px-5 py-4 text-right font-bold text-blue-900">
+                                TOTALES ({articleReportSearchTerm}):
+                              </td>
+                              <td className="px-5 py-4 text-right text-blue-700">
+                                {filteredArticleReportItems.reduce((sum, item) => sum + item.quantity, 0)} bultos
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-blue-700 text-base">
+                                {filteredArticleReportItems.reduce((sum, item) => sum + item.kilos, 0).toFixed(2)} kg
+                              </td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                onClick={() => setShowArticleReport(false)}
                 className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors text-sm"
               >
                 Cerrar
