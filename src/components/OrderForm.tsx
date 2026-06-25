@@ -12,6 +12,8 @@ interface OrderFormProps {
 }
 
 const PRODUCT_CODES: Record<string, string> = {
+  '1210': 'Cereza',
+  '3578': 'Melon',
   '4510': 'Mango',
   '4511': 'Mango avión',
   '4790': 'Sandia',
@@ -22,8 +24,7 @@ const PRODUCT_CODES: Record<string, string> = {
   '9032': 'Pitahaya',
   '3280': 'Coco',
   '3282': 'Coco de agua',
-  '1409': 'FRESAS',
-  '60': 'HIERBA BUENA'
+  '1409': 'FRESAS'
 };
 
 export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistory, onViewDashboard }: OrderFormProps) {
@@ -106,9 +107,17 @@ export function OrderForm({ onOrderCreated, initialOrder, onCancel, onViewHistor
     if (field === 'lot_number') {
       const lotStr = String(value);
       for (const [code, name] of Object.entries(PRODUCT_CODES)) {
-        if (lotStr.includes(code)) {
-          updatedItem.product_name = name;
-          break;
+        if (code.length >= 4) {
+          if (lotStr.includes(code)) {
+            updatedItem.product_name = name;
+            break;
+          }
+        } else {
+          // Para códigos cortos como '60', evitar coincidencia parcial en el medio (por ejemplo, en fechas como 202606)
+          if (lotStr === code || (lotStr.length > code.length && lotStr.endsWith(code))) {
+            updatedItem.product_name = name;
+            break;
+          }
         }
       }
     }
