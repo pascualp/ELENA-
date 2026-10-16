@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Loader2, Edit, Download, Plus, LayoutDashboard, Calendar, Settings, X, ClipboardList, Copy, Check, RefreshCw } from 'lucide-react';
 import { Order, OrderItem } from '../types';
-import { cn } from '../lib/utils';
+import { cn, getItemSale, emptyPriceAcc, addToPriceAcc, mergePriceAcc, avgPrice, totalAmountOf, type PriceAcc } from '../lib/utils';
 import * as XLSX from 'xlsx';
 import { storage } from '../lib/storage';
 import { db } from '../lib/firebase';
@@ -26,6 +26,18 @@ const defaultExportConfig: Record<ExportColumn, boolean> = {
   'Importe (€)': true,
   'Notas': false,
 };
+
+// Precio medio de venta (ponderado): por kilo y/o por unidad según cómo se vendió cada línea
+function AvgPriceCell({ acc }: { acc: PriceAcc }) {
+  const { perKg, perUnit } = avgPrice(acc);
+  if (perKg === null && perUnit === null) return <span className="text-slate-300">-</span>;
+  return (
+    <div className="leading-tight">
+      {perKg !== null && <div>{perKg.toFixed(2)} €/kg</div>}
+      {perUnit !== null && <div>{perUnit.toFixed(2)} €/unid.</div>}
+    </div>
+  );
+}
 
 export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashboard }: OrderListProps) {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -67,6 +79,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
         const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
         itemsSnap.docs.forEach(docSnap => {
           const item = docSnap.data() as OrderItem;
+          const sale = getItemSale(item);
           fetchedItems.push({
             order_id: order.id,
             order_date: order.created_at,
@@ -75,7 +88,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             lot_number: item.lot_number || '',
             quantity: Number(item.quantity) || 0,
             kilos: Number(item.total_item_kilos) || 0,
-            is_box: Boolean(item.is_box)
+            is_box: Boolean(item.is_box),
+            cancelled: order.status === 'cancelled',
+            unit_price: sale.price,
+            by_weight: sale.byWeight,
+            amount: sale.amount,
+            sale_kilos: sale.kilos
           });
         });
       }));
@@ -106,6 +124,30 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
     return item.product_name.toLowerCase().includes(articleReportSearchTerm.toLowerCase());
   });
 
+  // Resumen por artículo: kilos, importe y precio medio de venta ponderado (sin pedidos cancelados)
+  const articleSummary = (() => {
+    const map: Record<string, { name: string; albaranes: Set<string>; quantity: number; kilos: number; acc: PriceAcc }> = {};
+    filteredArticleReportItems.forEach(item => {
+      if (!map[item.product_name]) {
+        map[item.product_name] = { name: item.product_name, albaranes: new Set(), quantity: 0, kilos: 0, acc: emptyPriceAcc() };
+      }
+      const g = map[item.product_name];
+      g.albaranes.add(item.order_id);
+      g.quantity += item.quantity;
+      g.kilos += item.kilos;
+      if (!item.cancelled) {
+        if (item.by_weight) {
+          g.acc.kgAmount += item.amount;
+          g.acc.kgKilos += item.sale_kilos;
+        } else {
+          g.acc.unitAmount += item.amount;
+          g.acc.unitQty += item.quantity;
+        }
+      }
+    });
+    return Object.values(map).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
   const loadReportForDates = async (start: string, end: string) => {
     setLoadingReport(true);
     setReportError(null);
@@ -116,6 +158,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
         total_kilos: number;
         total_quantity: number;
         is_box: boolean;
+        price_acc: PriceAcc;
         product_names_set?: Set<string>;
       }> = {};
 
@@ -143,6 +186,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
               total_kilos: 0,
               total_quantity: 0,
               is_box: Boolean(item.is_box),
+              price_acc: emptyPriceAcc(),
               product_names_set: new Set([productName])
             };
           } else {
@@ -151,6 +195,8 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
 
           fetchedGroups[key].total_kilos += kilos;
           fetchedGroups[key].total_quantity += qty;
+          // Precio medio de venta: no cuentan los pedidos cancelados
+          if (order.status !== 'cancelled') addToPriceAcc(fetchedGroups[key].price_acc, item);
         });
       }));
 
@@ -186,30 +232,45 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
 
   const handleExportLotReportExcel = (itemsToExport: any[]) => {
     try {
-      const data = itemsToExport.map(item => ({
+      const priceCols = (acc: PriceAcc) => {
+        const p = avgPrice(acc);
+        return {
+          "Importe (€)": Number(totalAmountOf(acc).toFixed(2)),
+          "Precio medio (€/kg)": p.perKg !== null ? Number(p.perKg.toFixed(2)) : "",
+          "Precio medio (€/unid.)": p.perUnit !== null ? Number(p.perUnit.toFixed(2)) : ""
+        };
+      };
+
+      const data: any[] = itemsToExport.map(item => ({
         "Producto": item.product_name,
         "Lote": item.lot_number,
         "Cantidad": item.total_quantity,
-        "Kilos Totales": Number(item.total_kilos.toFixed(2))
+        "Kilos Totales": Number(item.total_kilos.toFixed(2)),
+        ...priceCols(item.price_acc)
       }));
 
       const totalQty = itemsToExport.reduce((sum, item) => sum + item.total_quantity, 0);
       const totalKilos = itemsToExport.reduce((sum, item) => sum + item.total_kilos, 0);
+      const totalAcc = itemsToExport.reduce((acc: PriceAcc, item) => mergePriceAcc(acc, item.price_acc), emptyPriceAcc());
 
       data.push({
         "Producto": "TOTAL CONSOLIDADO",
         "Lote": "",
         "Cantidad": totalQty,
-        "Kilos Totales": Number(totalKilos.toFixed(2))
+        "Kilos Totales": Number(totalKilos.toFixed(2)),
+        ...priceCols(totalAcc)
       });
 
       const worksheet = XLSX.utils.json_to_sheet(data);
-      
+
       worksheet['!cols'] = [
         { wch: 35 }, // Producto
         { wch: 15 }, // Lote
         { wch: 12 }, // Cantidad
-        { wch: 15 }  // Kilos Totales
+        { wch: 15 }, // Kilos Totales
+        { wch: 14 }, // Importe
+        { wch: 20 }, // Precio medio €/kg
+        { wch: 22 }  // Precio medio €/unid.
       ];
 
       const workbook = XLSX.utils.book_new();
@@ -223,14 +284,20 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
 
   const handleCopyLotReportToClipboard = (itemsToCopy: any[]) => {
     try {
-      let text = "Producto\tLote\tCantidad\tKilos Totales (kg)\n";
+      const priceText = (acc: PriceAcc) => {
+        const p = avgPrice(acc);
+        return `${totalAmountOf(acc).toFixed(2)}\t${p.perKg !== null ? p.perKg.toFixed(2) : ''}\t${p.perUnit !== null ? p.perUnit.toFixed(2) : ''}`;
+      };
+
+      let text = "Producto\tLote\tCantidad\tKilos Totales (kg)\tImporte (€)\tPrecio medio (€/kg)\tPrecio medio (€/unid.)\n";
       itemsToCopy.forEach(item => {
-        text += `${item.product_name}\t${item.lot_number}\t${item.total_quantity}\t${item.total_kilos.toFixed(2)}\n`;
+        text += `${item.product_name}\t${item.lot_number}\t${item.total_quantity}\t${item.total_kilos.toFixed(2)}\t${priceText(item.price_acc)}\n`;
       });
 
       const totalQty = itemsToCopy.reduce((sum, item) => sum + item.total_quantity, 0);
       const totalKilos = itemsToCopy.reduce((sum, item) => sum + item.total_kilos, 0);
-      text += `TOTAL\t\t${totalQty}\t${totalKilos.toFixed(2)}\n`;
+      const totalAcc = itemsToCopy.reduce((acc: PriceAcc, item) => mergePriceAcc(acc, item.price_acc), emptyPriceAcc());
+      text += `TOTAL\t\t${totalQty}\t${totalKilos.toFixed(2)}\t${priceText(totalAcc)}\n`;
 
       navigator.clipboard.writeText(text);
       setCopiedReport(true);
@@ -598,12 +665,14 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                             <th className="px-5 py-3">Lote</th>
                             <th className="px-5 py-3 text-right">Cantidad</th>
                             <th className="px-5 py-3 text-right">Kilos Totales</th>
+                            <th className="px-5 py-3 text-right">Importe</th>
+                            <th className="px-5 py-3 text-right">Precio medio</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {filteredReportItems.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-5 py-10 text-center text-slate-500">
+                              <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
                                 No se encontraron artículos que cumplan los criterios.
                               </td>
                             </tr>
@@ -622,6 +691,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                                 <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-400">
                                   {item.total_kilos.toFixed(2)} kg
                                 </td>
+                                <td className="px-5 py-3.5 text-right font-mono text-slate-700">
+                                  {totalAmountOf(item.price_acc).toFixed(2)} €
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-700">
+                                  <AvgPriceCell acc={item.price_acc} />
+                                </td>
                               </tr>
                             ))
                           )}
@@ -638,6 +713,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                               <td className="px-5 py-4 text-right font-mono font-bold text-slate-400 text-base">
                                 {filteredReportItems.reduce((sum, item) => sum + item.total_kilos, 0).toFixed(2)} kg
                               </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-slate-700 text-base">
+                                {filteredReportItems.reduce((sum, item) => sum + totalAmountOf(item.price_acc), 0).toFixed(2)} €
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-emerald-700">
+                                <AvgPriceCell acc={filteredReportItems.reduce((acc: PriceAcc, item) => mergePriceAcc(acc, item.price_acc), emptyPriceAcc())} />
+                              </td>
                             </tr>
                           </tfoot>
                         )}
@@ -646,6 +727,9 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                   </div>
                   <p className="text-xs text-slate-400 text-right italic">
                     * Sugerencia: Utilice la opción de "Copiar Portapapeles" para pegar el listado tabulado directamente en Microsoft Excel, Google Sheets, o su software de facturación.
+                  </p>
+                  <p className="text-xs text-slate-400 text-right italic">
+                    * Precio medio de venta = importe total ÷ kilos totales (ponderado). Las líneas vendidas por unidad se muestran en €/unid. No incluye pedidos cancelados.
                   </p>
                 </>
               )}
@@ -665,12 +749,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
 
       {showArticleReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-6xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
               <div>
                 <h3 className="font-bold text-lg text-slate-800">Informe de Artículos por Albarán</h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Cantidades y Kilos de un artículo específico, separados por albarán (pedido)
+                  Cantidades, kilos, importe y precio medio de venta de un artículo, separados por albarán (pedido)
                 </p>
               </div>
               <button onClick={() => setShowArticleReport(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
@@ -736,6 +820,40 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                     </div>
                   </div>
 
+                  {articleSummary.length > 0 && (
+                    <div className="border border-blue-100 rounded-xl overflow-hidden shadow-sm">
+                      <div className="bg-blue-50/60 px-5 py-2 text-xs font-bold uppercase tracking-wide text-blue-900">
+                        Precio medio de venta por artículo
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                            <tr>
+                              <th className="px-5 py-2.5">Artículo</th>
+                              <th className="px-5 py-2.5 text-right">Albaranes</th>
+                              <th className="px-5 py-2.5 text-right">Bultos</th>
+                              <th className="px-5 py-2.5 text-right">Kilos</th>
+                              <th className="px-5 py-2.5 text-right">Importe</th>
+                              <th className="px-5 py-2.5 text-right">Precio medio</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {articleSummary.map(g => (
+                              <tr key={g.name} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="px-5 py-2.5 font-semibold text-blue-900">{g.name}</td>
+                                <td className="px-5 py-2.5 text-right text-slate-700">{g.albaranes.size}</td>
+                                <td className="px-5 py-2.5 text-right text-slate-700">{g.quantity}</td>
+                                <td className="px-5 py-2.5 text-right font-mono text-slate-600">{g.kilos.toFixed(2)} kg</td>
+                                <td className="px-5 py-2.5 text-right font-mono text-slate-700">{totalAmountOf(g.acc).toFixed(2)} €</td>
+                                <td className="px-5 py-2.5 text-right font-mono font-bold text-emerald-700"><AvgPriceCell acc={g.acc} /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border border-slate-150 rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm">
@@ -748,12 +866,14 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                             <th className="px-5 py-3">Lote</th>
                             <th className="px-5 py-3 text-right">Bultos</th>
                             <th className="px-5 py-3 text-right">Kilos Netos</th>
+                            <th className="px-5 py-3 text-right">Precio</th>
+                            <th className="px-5 py-3 text-right">Importe</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {filteredArticleReportItems.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                              <td colSpan={9} className="px-5 py-10 text-center text-slate-500">
                                 {articleReportSearchTerm ? 'No se encontraron artículos que cumplan los criterios.' : 'Escriba el nombre de un artículo en el buscador para ver sus resultados.'}
                               </td>
                             </tr>
@@ -762,7 +882,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                               <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
                                 <td className="px-5 py-3.5 text-slate-600">{new Date(item.order_date).toLocaleDateString('es-ES')}</td>
                                 <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{item.order_id.slice(0, 8)}</td>
-                                <td className="px-5 py-3.5 text-slate-800">{item.customer_name}</td>
+                                <td className="px-5 py-3.5 text-slate-800">
+                                  {item.customer_name}
+                                  {item.cancelled && (
+                                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-50 text-red-600 border border-red-100">Cancelado</span>
+                                  )}
+                                </td>
                                 <td className="px-5 py-3.5 font-semibold text-blue-900">{item.product_name}</td>
                                 <td className="px-5 py-3.5 text-slate-600 text-sm font-mono">{item.lot_number || '-'}</td>
                                 <td className="px-5 py-3.5 text-right text-slate-700">
@@ -770,6 +895,12 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                                 </td>
                                 <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-600">
                                   {item.kilos.toFixed(2)} kg
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-mono text-slate-600">
+                                  {item.unit_price.toFixed(2)} {item.by_weight ? '€/kg' : '€/unid.'}
+                                </td>
+                                <td className="px-5 py-3.5 text-right font-mono text-slate-700">
+                                  {item.amount.toFixed(2)} €
                                 </td>
                               </tr>
                             ))
@@ -787,12 +918,21 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
                               <td className="px-5 py-4 text-right font-mono font-bold text-blue-700 text-base">
                                 {filteredArticleReportItems.reduce((sum, item) => sum + item.kilos, 0).toFixed(2)} kg
                               </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-emerald-700">
+                                <AvgPriceCell acc={articleSummary.reduce((acc: PriceAcc, g) => mergePriceAcc(acc, g.acc), emptyPriceAcc())} />
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono font-bold text-blue-700 text-base">
+                                {articleSummary.reduce((sum, g) => sum + totalAmountOf(g.acc), 0).toFixed(2)} €
+                              </td>
                             </tr>
                           </tfoot>
                         )}
                       </table>
                     </div>
                   </div>
+                  <p className="text-xs text-slate-400 text-right italic">
+                    * Precio medio de venta = importe total ÷ kilos totales (ponderado). Las líneas vendidas por unidad se muestran en €/unid. No incluye pedidos cancelados.
+                  </p>
                 </>
               )}
             </div>
