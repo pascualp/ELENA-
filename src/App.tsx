@@ -11,6 +11,17 @@ import { storage } from './lib/storage';
 import { auth } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 
+// 25/11/2026: cada publicación de Vercel tiene su propia dirección (p. ej. elena-qak1-1uvvbb9zb-pascualps-projects.vercel.app)
+// y Google NO deja entrar desde ahí (en Firebase solo están autorizadas las direcciones fijas). Si se abre una de esas,
+// se salta a la dirección fija del mismo proyecto. Las de rama (…-git-main-…) y otros proyectos no se tocan.
+export function direccionFija(host: string): string | null {
+  const m = host.match(/^(elena-qak1|elena)-[a-z0-9]+-pascualps-projects\.vercel\.app$/);
+  if (!m) return null;
+  return m[1] === 'elena-qak1' ? 'elena-qak1.vercel.app' : 'elena-blond.vercel.app';
+}
+const fija = typeof window !== 'undefined' ? direccionFija(window.location.hostname) : null;
+if (fija) window.location.replace(`https://${fija}${window.location.pathname}${window.location.search}${window.location.hash}`);
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -34,7 +45,7 @@ export default function App() {
     } catch (error: any) {
       console.error('Error signing in:', error);
       if (error.code === 'auth/unauthorized-domain') {
-        alert(`ERROR DE DOMINIO: Tu web en Vercel no tiene permiso todavía.\n\n1. Ve a: https://console.firebase.google.com/project/gen-lang-client-0061028494/auth/settings\n2. Busca la pestaña "Settings" -> "Authorized domains".\n3. Añade: elena-qak1-hopezcizs-pascualps-projects.vercel.app`);
+        alert(`Google no deja entrar desde esta dirección (${window.location.hostname}).\n\nAbre la app desde https://elena-qak1.vercel.app o https://elena-blond.vercel.app.\n\nSi de verdad hace falta esta dirección, hay que añadirla en Firebase: https://console.firebase.google.com/project/gen-lang-client-0061028494/authentication/settings → «Dominios autorizados».`);
       } else {
         alert(`Error al iniciar sesión: ${error.message || 'Error desconocido'}`);
       }
