@@ -9,8 +9,11 @@ interface DashboardProps {
   onAction: (tab: string) => void;
 }
 
+// Últimas estadísticas calculadas: al volver al panel se enseñan al momento y se refrescan por detrás.
+let ultimasStats: Stats | null = null;
+
 export function Dashboard({ onAction }: DashboardProps) {
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<Stats | null>(ultimasStats);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -18,6 +21,7 @@ export function Dashboard({ onAction }: DashboardProps) {
     try {
       setLoading(true);
       const data = await storage.getStats();
+      ultimasStats = data;
       setStats(data);
     } catch (error: any) {
       console.error(error);

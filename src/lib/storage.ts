@@ -18,6 +18,31 @@ export async function enTandas<T, R>(lista: T[], fn: (x: T) => Promise<R>, limit
   return resultados;
 }
 
+// Kilos por producto de un pedido, a partir de sus líneas (ya calculadas, con total_item_kilos).
+export function resumirProductos(items: { product_name?: string; total_item_kilos?: number }[]) {
+  const mapa: Record<string, number> = {};
+  for (const it of items) {
+    if (it.product_name) mapa[it.product_name] = (mapa[it.product_name] || 0) + (Number(it.total_item_kilos) || 0);
+  }
+  return Object.entries(mapa).map(([nombre, kilos]) => ({ nombre, kilos }));
+}
+
+// El resumen guardado sirve si se hizo con los mismos kilos que tiene ahora el pedido.
+const resumenAlDia = (o: Order) =>
+  Array.isArray(o.resumen_productos) && o.resumen_total_kilos === (o.total_kilos || 0);
+
+// Guarda el resumen en los pedidos que no lo tenían (en lotes de 400 escrituras; Firestore admite 500).
+// Si falla no pasa nada: la próxima vez se vuelve a calcular.
+async function guardarResumenes(lista: { id: string; resumen_productos: Order['resumen_productos']; resumen_total_kilos: number }[]) {
+  for (let i = 0; i < lista.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const r of lista.slice(i, i + 400)) {
+      batch.update(doc(db, 'orders', r.id), { resumen_productos: r.resumen_productos, resumen_total_kilos: r.resumen_total_kilos });
+    }
+    await batch.commit();
+  }
+}
+
 export const storage = {
   getOrders: async (startDate?: string, endDate?: string): Promise<Order[]> => {
     try {
@@ -133,6 +158,11 @@ export const storage = {
 
       await batch.commit();
 
+      // Resumen de kilos por producto para el panel. Va APARTE y después: si fallara, el pedido ya está guardado
+      // igual que siempre y el panel leerá sus líneas.
+      guardarResumenes([{ id: orderRef.id, resumen_productos: resumirProductos(insertedItems), resumen_total_kilos: totalKilos }])
+        .catch(err => console.warn('No se pudo guardar el resumen del pedido:', err));
+
       return { id: orderRef.id, ...newOrder, items: insertedItems };
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'orders');
@@ -219,6 +249,10 @@ export const storage = {
       });
 
       await batch.commit();
+
+      // Resumen al día con las líneas nuevas, aparte (ver createOrder). Se espera para que getOrder lo devuelva ya.
+      await guardarResumenes([{ id, resumen_productos: resumirProductos(insertedItems), resumen_total_kilos: totalKilos }])
+        .catch(err => console.warn('No se pudo guardar el resumen del pedido:', err));
       
       // Get the full order to return
       const finalOrder = await storage.getOrder(id);
@@ -321,17 +355,27 @@ export const storage = {
       .slice(0, 5);
 
     // Top Products
-    // 25/11/2026: antes se pedían las líneas pedido a pedido, UNO DETRÁS DE OTRO (300 pedidos = 300 viajes seguidos a la
-    // base de datos) y por eso «Cargando estadísticas...» tardaba más cada día. Ahora van en tandas de 20 a la vez.
+    // 25/11/2026: antes se leían las líneas de CADA pedido de la historia (un viaje a la base por pedido) y
+    // «Cargando estadísticas...» tardaba más cada día. Ahora cada pedido lleva su resumen de kilos por producto y
+    // basta con la consulta de pedidos de arriba. Solo se leen las líneas de los pedidos sin resumen al día
+    // (los antiguos, la primera vez), y se les guarda para que la siguiente vez ya no haga falta.
     const productMap: Record<string, number> = {};
-    const itemsPorPedido = await enTandas(orders, order => getDocs(collection(db, 'orders', order.id, 'items')));
-    for (const itemsSnap of itemsPorPedido) {
-      itemsSnap.docs.forEach(itemDoc => {
-        const item = itemDoc.data() as OrderItem;
-        if (item.product_name) {
-          productMap[item.product_name] = (productMap[item.product_name] || 0) + (item.total_item_kilos || 0);
-        }
-      });
+    const sumar = (resumen: Order['resumen_productos']) =>
+      (resumen || []).forEach(r => { productMap[r.nombre] = (productMap[r.nombre] || 0) + (r.kilos || 0); });
+
+    const sinResumen = orders.filter(o => !resumenAlDia(o));
+    orders.filter(resumenAlDia).forEach(o => sumar(o.resumen_productos));
+
+    if (sinResumen.length > 0) {
+      const itemsPorPedido = await enTandas(sinResumen, order => getDocs(collection(db, 'orders', order.id, 'items')));
+      const nuevos = sinResumen.map((o, i) => ({
+        id: o.id,
+        resumen_productos: resumirProductos(itemsPorPedido[i].docs.map(d => d.data() as OrderItem)),
+        resumen_total_kilos: o.total_kilos || 0,
+      }));
+      nuevos.forEach(n => sumar(n.resumen_productos));
+      // Se guardan sin esperar: el panel no tiene que aguantar a que se escriban.
+      guardarResumenes(nuevos).catch(err => console.warn('No se pudieron guardar los resúmenes de productos:', err));
     }
     const topProducts = Object.entries(productMap)
       .map(([name, kilos]) => ({ name, kilos }))

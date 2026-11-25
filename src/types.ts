@@ -21,6 +21,11 @@ export interface Order {
   total_amount: number;
   notes: string;
   items?: OrderItem[];
+  // Kilos por producto de este pedido, guardados en el propio pedido para que el panel no tenga que leer las líneas
+  // de cada pedido (25/11/2026). resumen_total_kilos = total_kilos del pedido cuando se hizo el resumen: si no cuadra,
+  // el pedido se cambió desde otra versión de la app y el resumen se vuelve a calcular.
+  resumen_productos?: { nombre: string; kilos: number }[];
+  resumen_total_kilos?: number;
 }
 
 export interface Stats {
