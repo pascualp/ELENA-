@@ -305,9 +305,12 @@ export const storage = {
       .slice(0, 5);
 
     // Top Products
+    // 25/11/2026: antes se pedían las líneas pedido a pedido, UNO DETRÁS DE OTRO (300 pedidos = 300 viajes seguidos a la
+    // base de datos) y por eso «Cargando estadísticas...» tardaba más cada día. Ahora se piden todas a la vez, igual que
+    // ya hacen los informes de la lista de pedidos (OrderList).
     const productMap: Record<string, number> = {};
-    for (const order of orders) {
-      const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
+    const itemsPorPedido = await Promise.all(orders.map(order => getDocs(collection(db, 'orders', order.id, 'items'))));
+    for (const itemsSnap of itemsPorPedido) {
       itemsSnap.docs.forEach(itemDoc => {
         const item = itemDoc.data() as OrderItem;
         if (item.product_name) {
@@ -352,9 +355,11 @@ export const storage = {
     }
     
     const exportData: any[] = [];
-    
-    for (const order of orders) {
-      const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
+    // Igual que en getStats: las líneas de todos los pedidos a la vez (Promise.all mantiene el orden de los pedidos).
+    const itemsPorPedido = await Promise.all(orders.map(order => getDocs(collection(db, 'orders', order.id, 'items'))));
+
+    for (const [i, order] of orders.entries()) {
+      const itemsSnap = itemsPorPedido[i];
       const items = itemsSnap.docs.map(doc => doc.data() as OrderItem);
       
       if (items.length === 0) {
