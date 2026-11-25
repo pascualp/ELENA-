@@ -1,6 +1,6 @@
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
-import { Order, OrderItem } from '../types';
+import { Order, OrderItem, Stats } from '../types';
 
 // Hace fn(x) para cada elemento con como mucho `limite` consultas a la vez y devuelve los resultados EN EL MISMO ORDEN.
 // 25/11/2026: con todos los pedidos a la vez (Promise.all de cientos) Firestore responde «Too many outstanding requests»;
@@ -40,6 +40,51 @@ async function guardarResumenes(lista: { id: string; resumen_productos: Order['r
       batch.update(doc(db, 'orders', r.id), { resumen_productos: r.resumen_productos, resumen_total_kilos: r.resumen_total_kilos });
     }
     await batch.commit();
+  }
+}
+
+const sumarResumen = (mapa: Record<string, number>, resumen: Order['resumen_productos']) =>
+  (resumen || []).forEach(r => { mapa[r.nombre] = (mapa[r.nombre] || 0) + (Number(r.kilos) || 0); });
+
+const top5 = (mapa: Record<string, number>) =>
+  Object.entries(mapa).map(([name, kilos]) => ({ name, kilos })).sort((a, b) => b.kilos - a.kilos).slice(0, 5);
+
+export interface ProductosCompletos {
+  topProducts: Stats['topProducts'];
+  segundos: number;      // lo que tardó leer las líneas y guardar los resúmenes
+  guardados: number;     // resúmenes guardados (0 si falló al guardar)
+  error?: string;        // por qué no se pudieron guardar (entonces la próxima vez se vuelven a leer)
+}
+
+// Lee las líneas de los pedidos sin resumen (en tandas de 20), suma sus productos a los que ya había y GUARDA el
+// resumen en cada pedido, para que la próxima vez no haga falta. Si ya hay uno en marcha (p. ej. se salió y se volvió
+// al panel), se reutiliza: así nunca hay más de 20 consultas abiertas a la vez.
+let completando: Promise<ProductosCompletos> | null = null;
+async function completarProductos(sinResumen: Order[], parcial: Record<string, number>): Promise<ProductosCompletos> {
+  if (completando) return completando;
+  completando = (async () => {
+    const t0 = Date.now();
+    const mapa = { ...parcial };
+    const itemsPorPedido = await enTandas(sinResumen, o => getDocs(collection(db, 'orders', o.id, 'items')));
+    const nuevos = sinResumen.map((o, i) => ({
+      id: o.id,
+      resumen_productos: resumirProductos(itemsPorPedido[i].docs.map(d => d.data() as OrderItem)),
+      resumen_total_kilos: o.total_kilos || 0,
+    }));
+    nuevos.forEach(n => sumarResumen(mapa, n.resumen_productos));
+    let error: string | undefined;
+    try {
+      await guardarResumenes(nuevos);
+    } catch (e: any) {
+      error = e?.code || e?.message || String(e);
+      console.warn('No se pudieron guardar los resúmenes de productos:', e);
+    }
+    return { topProducts: top5(mapa), segundos: (Date.now() - t0) / 1000, guardados: error ? 0 : nuevos.length, error };
+  })();
+  try {
+    return await completando;
+  } finally {
+    completando = null;
   }
 }
 
@@ -282,7 +327,9 @@ export const storage = {
     await batch.commit();
   },
 
-  getStats: async (startDate?: string, endDate?: string) => {
+  // Estadísticas del panel en dos tiempos: `stats` sale con UNA consulta (pedidos); si hay pedidos sin resumen de
+  // productos, `completar()` lee sus líneas, guarda los resúmenes y devuelve los productos completos.
+  getStatsRapido: async (startDate?: string, endDate?: string) => {
     let q = query(collection(db, 'orders'));
     const ordersSnap = await getDocs(q);
     let orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
@@ -354,42 +401,27 @@ export const storage = {
       .sort((a, b) => b.kilos - a.kilos)
       .slice(0, 5);
 
-    // Top Products
-    // 25/11/2026: antes se leían las líneas de CADA pedido de la historia (un viaje a la base por pedido) y
-    // «Cargando estadísticas...» tardaba más cada día. Ahora cada pedido lleva su resumen de kilos por producto y
-    // basta con la consulta de pedidos de arriba. Solo se leen las líneas de los pedidos sin resumen al día
-    // (los antiguos, la primera vez), y se les guarda para que la siguiente vez ya no haga falta.
+    // Top Products: con los resúmenes guardados en cada pedido (sin leer líneas). Los pedidos SIN resumen al día
+    // (los antiguos, la primera vez) NO se esperan aquí: se completan aparte con `completar` (ver completarProductos),
+    // así el panel se enseña ya y solo la tarjeta de productos espera.
     const productMap: Record<string, number> = {};
-    const sumar = (resumen: Order['resumen_productos']) =>
-      (resumen || []).forEach(r => { productMap[r.nombre] = (productMap[r.nombre] || 0) + (r.kilos || 0); });
-
     const sinResumen = orders.filter(o => !resumenAlDia(o));
-    orders.filter(resumenAlDia).forEach(o => sumar(o.resumen_productos));
+    orders.filter(resumenAlDia).forEach(o => sumarResumen(productMap, o.resumen_productos));
 
-    if (sinResumen.length > 0) {
-      const itemsPorPedido = await enTandas(sinResumen, order => getDocs(collection(db, 'orders', order.id, 'items')));
-      const nuevos = sinResumen.map((o, i) => ({
-        id: o.id,
-        resumen_productos: resumirProductos(itemsPorPedido[i].docs.map(d => d.data() as OrderItem)),
-        resumen_total_kilos: o.total_kilos || 0,
-      }));
-      nuevos.forEach(n => sumar(n.resumen_productos));
-      // Se guardan sin esperar: el panel no tiene que aguantar a que se escriban.
-      guardarResumenes(nuevos).catch(err => console.warn('No se pudieron guardar los resúmenes de productos:', err));
-    }
-    const topProducts = Object.entries(productMap)
-      .map(([name, kilos]) => ({ name, kilos }))
-      .sort((a, b) => b.kilos - a.kilos)
-      .slice(0, 5);
-
-    return { 
-      totalOrders, 
-      totalKilos, 
-      totalAmount,
-      dailyStats,
-      topCustomers,
-      topProducts
+    const stats: Stats = { totalOrders, totalKilos, totalAmount, dailyStats, topCustomers, topProducts: top5(productMap) };
+    return {
+      stats,
+      pedidos: orders.length,
+      sinResumen: sinResumen.length,
+      completar: sinResumen.length === 0 ? null : () => completarProductos(sinResumen, productMap),
     };
+  },
+
+  // Igual que antes (todo junto, esperando también a los productos), por si algo más lo usa.
+  getStats: async (startDate?: string, endDate?: string): Promise<Stats> => {
+    const r = await storage.getStatsRapido(startDate, endDate);
+    if (r.completar) r.stats.topProducts = (await r.completar()).topProducts;
+    return r.stats;
   },
 
   getCustomers: async () => {

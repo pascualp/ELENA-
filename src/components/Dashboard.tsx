@@ -12,22 +12,48 @@ interface DashboardProps {
 // Últimas estadísticas calculadas: al volver al panel se enseñan al momento y se refrescan por detrás.
 let ultimasStats: Stats | null = null;
 
+// Medida de la última carga (se enseña en pequeño al pie del panel): sirve para ver con datos reales qué tarda.
+interface Medida { pedidos: number; sinResumen: number; segundos: number; productosSeg?: number; guardados?: number; error?: string }
+
 export function Dashboard({ onAction }: DashboardProps) {
   const [stats, setStats] = useState<Stats | null>(ultimasStats);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [calculandoProductos, setCalculandoProductos] = useState(false);
+  const [medida, setMedida] = useState<Medida | null>(null);
 
+  // 25/11/2026: el panel ya no espera a «Top 5 Productos». Sale con una sola consulta (pedidos); los productos de
+  // los pedidos que aún no tienen resumen se calculan después y solo esa tarjeta pone «calculando».
   const fetchData = async () => {
+    const t0 = performance.now();
     try {
       setLoading(true);
-      const data = await storage.getStats();
-      ultimasStats = data;
-      setStats(data);
+      const r = await storage.getStatsRapido();
+      ultimasStats = r.stats;
+      setStats(r.stats);
+      setMedida({ pedidos: r.pedidos, sinResumen: r.sinResumen, segundos: (performance.now() - t0) / 1000 });
+      setLoading(false);
+      if (r.completar) {
+        // Aparte: si esto falla, el panel ya está a la vista; solo se apunta el error en la línea de medida.
+        setCalculandoProductos(true);
+        const t1 = performance.now();
+        try {
+          const p = await r.completar();
+          const completas = { ...r.stats, topProducts: p.topProducts };
+          ultimasStats = completas;
+          setStats(completas);
+          setMedida(m => m && { ...m, productosSeg: p.segundos, guardados: p.guardados, error: p.error });
+        } catch (e: any) {
+          console.error('Error calculando los productos:', e);
+          setMedida(m => m && { ...m, productosSeg: (performance.now() - t1) / 1000, guardados: 0, error: e?.code || e?.message || String(e) });
+        }
+      }
     } catch (error: any) {
       console.error(error);
       setErrorMsg(error.message || 'No se pudo conectar a la base de datos');
     } finally {
       setLoading(false);
+      setCalculandoProductos(false);
     }
   };
 
@@ -230,6 +256,11 @@ export function Dashboard({ onAction }: DashboardProps) {
 
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-semibold mb-4">Top 5 Productos (Kilos)</h3>
+          {calculandoProductos && (
+            <p className="text-xs text-slate-400 -mt-2 mb-3 animate-pulse">
+              Calculando los productos de los pedidos antiguos (solo esta vez)...
+            </p>
+          )}
           <div className="space-y-4">
             {stats.topProducts.map((product, index) => (
               <div key={index} className="flex items-center justify-between">
@@ -250,12 +281,26 @@ export function Dashboard({ onAction }: DashboardProps) {
                 </div>
               </div>
             ))}
-            {stats.topProducts.length === 0 && (
+            {stats.topProducts.length === 0 && !calculandoProductos && (
               <p className="text-center text-slate-400 py-4">Sin datos suficientes</p>
             )}
           </div>
         </div>
       </div>
+
+      {medida && (
+        <p className="text-[11px] text-slate-400 text-right">
+          {medida.pedidos} pedidos · panel en {medida.segundos.toFixed(1)} s
+          {medida.sinResumen > 0 && (
+            <>
+              {' '}· {medida.sinResumen} sin resumen de productos
+              {medida.productosSeg !== undefined && <> (calculados en {medida.productosSeg.toFixed(1)} s, </>}
+              {medida.productosSeg !== undefined && (medida.error ? <span className="text-red-400">no se guardaron: {medida.error}</span> : <>guardados {medida.guardados}</>)}
+              {medida.productosSeg !== undefined && <>)</>}
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
