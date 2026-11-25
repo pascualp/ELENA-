@@ -2,6 +2,22 @@ import { db, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { Order, OrderItem } from '../types';
 
+// Hace fn(x) para cada elemento con como mucho `limite` consultas a la vez y devuelve los resultados EN EL MISMO ORDEN.
+// 25/11/2026: con todos los pedidos a la vez (Promise.all de cientos) Firestore responde «Too many outstanding requests»;
+// uno detrás de otro (como estaba antes) tardaba demasiado. Por eso, tandas de 20.
+export async function enTandas<T, R>(lista: T[], fn: (x: T) => Promise<R>, limite = 20): Promise<R[]> {
+  const resultados: R[] = new Array(lista.length);
+  let siguiente = 0;
+  const trabajador = async () => {
+    while (siguiente < lista.length) {
+      const i = siguiente++;
+      resultados[i] = await fn(lista[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limite, lista.length) }, trabajador));
+  return resultados;
+}
+
 export const storage = {
   getOrders: async (startDate?: string, endDate?: string): Promise<Order[]> => {
     try {
@@ -306,10 +322,9 @@ export const storage = {
 
     // Top Products
     // 25/11/2026: antes se pedían las líneas pedido a pedido, UNO DETRÁS DE OTRO (300 pedidos = 300 viajes seguidos a la
-    // base de datos) y por eso «Cargando estadísticas...» tardaba más cada día. Ahora se piden todas a la vez, igual que
-    // ya hacen los informes de la lista de pedidos (OrderList).
+    // base de datos) y por eso «Cargando estadísticas...» tardaba más cada día. Ahora van en tandas de 20 a la vez.
     const productMap: Record<string, number> = {};
-    const itemsPorPedido = await Promise.all(orders.map(order => getDocs(collection(db, 'orders', order.id, 'items'))));
+    const itemsPorPedido = await enTandas(orders, order => getDocs(collection(db, 'orders', order.id, 'items')));
     for (const itemsSnap of itemsPorPedido) {
       itemsSnap.docs.forEach(itemDoc => {
         const item = itemDoc.data() as OrderItem;
@@ -355,8 +370,8 @@ export const storage = {
     }
     
     const exportData: any[] = [];
-    // Igual que en getStats: las líneas de todos los pedidos a la vez (Promise.all mantiene el orden de los pedidos).
-    const itemsPorPedido = await Promise.all(orders.map(order => getDocs(collection(db, 'orders', order.id, 'items'))));
+    // Igual que en getStats: en tandas de 20 (enTandas mantiene el orden de los pedidos).
+    const itemsPorPedido = await enTandas(orders, order => getDocs(collection(db, 'orders', order.id, 'items')));
 
     for (const [i, order] of orders.entries()) {
       const itemsSnap = itemsPorPedido[i];

@@ -3,7 +3,7 @@ import { Eye, Printer, Trash2, Search, Filter, CheckCircle, Clock, XCircle, Load
 import { Order, OrderItem } from '../types';
 import { cn, getItemSale, emptyPriceAcc, addToPriceAcc, mergePriceAcc, avgPrice, totalAmountOf, type PriceAcc } from '../lib/utils';
 import * as XLSX from 'xlsx';
-import { storage } from '../lib/storage';
+import { storage, enTandas } from '../lib/storage';
 import { db } from '../lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -75,7 +75,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
       const fetchedItems: any[] = [];
       const reportOrders = await storage.getOrders(start || undefined, end || undefined);
 
-      await Promise.all(reportOrders.map(async (order) => {
+      await enTandas(reportOrders, async (order) => {
         const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
         itemsSnap.docs.forEach(docSnap => {
           const item = docSnap.data() as OrderItem;
@@ -96,7 +96,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
             sale_kilos: sale.kilos
           });
         });
-      }));
+      });
 
       // Sort by order date desc
       fetchedItems.sort((a, b) => new Date(b.order_date).getTime() - new Date(a.order_date).getTime());
@@ -165,7 +165,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
       // Load all orders for the selected date range
       const reportOrders = await storage.getOrders(start || undefined, end || undefined);
 
-      await Promise.all(reportOrders.map(async (order) => {
+      await enTandas(reportOrders, async (order) => {
         const itemsSnap = await getDocs(collection(db, 'orders', order.id, 'items'));
         itemsSnap.docs.forEach(docSnap => {
           const item = docSnap.data() as OrderItem;
@@ -198,7 +198,7 @@ export function OrderList({ onSelectOrder, onEditOrder, onNewOrder, onViewDashbo
           // Precio medio de venta: no cuentan los pedidos cancelados
           if (order.status !== 'cancelled') addToPriceAcc(fetchedGroups[key].price_acc, item);
         });
-      }));
+      });
 
       // Join the unique product names for items with the same lot
       const finalItems = Object.values(fetchedGroups).map(group => {
